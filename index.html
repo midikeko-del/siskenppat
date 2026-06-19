@@ -371,6 +371,9 @@ const paparTarikh = (b) => (b.tarikhTamat && b.tarikhTamat !== b.tarikh)
   : fmtTarikh(b.tarikh);
 const veh = (id) => vehicles.find(v => v.id === id);
 const drv = (id) => drivers.find(d => d.id === id);
+/* Senarai AKTIF (sembunyikan rekod yang diarkib) — veh()/drv() kekal cari semua untuk sejarah */
+const kenderaanAktif = () => vehicles.filter(v => v.status !== "dipadam");
+const pemanduAktif   = () => drivers.filter(d => d.status !== "dipadam");
 
 function fmtTarikh(iso){
   const bln = ["Jan","Feb","Mac","Apr","Mei","Jun","Jul","Ogo","Sep","Okt","Nov","Dis"];
@@ -670,7 +673,7 @@ function renderAwam(){
 
   const head = MINGGU.map((t,i) =>
     `<th style="${t===HARI_INI?'color:var(--amber-d)':''}">${HARI[i]}<br><span style="font-weight:400;text-transform:none">${fmtTarikh(t)}</span></th>`).join("");
-  const gRows = drivers.map(d => {
+  const gRows = pemanduAktif().map(d => {
     const cells = MINGGU.map(tarikh => {
       const cls = tarikh === HARI_INI ? "today" : "";
       if(d.status === "cuti") return `<td class="${cls}"><span class="off">Cuti</span></td>`;
@@ -830,14 +833,14 @@ function statusKenderaan(v){
 /* ---------- PAPAN PEMUKA ---------- */
 function renderDashboard(){
   const s = {
-    tersedia: vehicles.filter(v=>statusKenderaan(v)==="tersedia").length,
-    jalan: vehicles.filter(v=>statusKenderaan(v)==="dalam_perjalanan").length,
-    sel: vehicles.filter(v=>statusKenderaan(v)==="selenggara").length,
+    tersedia: kenderaanAktif().filter(v=>statusKenderaan(v)==="tersedia").length,
+    jalan: kenderaanAktif().filter(v=>statusKenderaan(v)==="dalam_perjalanan").length,
+    sel: kenderaanAktif().filter(v=>statusKenderaan(v)==="selenggara").length,
     tunggu: bookings.filter(b=>b.status==="menunggu").length,
   };
   const trips = bookings.filter(b => dudukiHari(b, HARI_INI) && (b.status==="diluluskan" || b.status==="selesai"));
 
-  const fleetRows = vehicles.map(v => {
+  const fleetRows = kenderaanAktif().map(v => {
     const trip = trips.find(t => t.vehicleId === v.id && t.status === "diluluskan");
     const d = trip ? drv(trip.driverId) : null;
     return `<tr>
@@ -922,7 +925,7 @@ function renderTempahan(){
 
 /* ---------- KENDERAAN ---------- */
 function renderKenderaan(){
-  const cards = vehicles.map(v => {
+  const cards = kenderaanAktif().map(v => {
     const taxWarn = v.roadtax <= tambahHari(HARI_INI, 60); // tamat dalam 60 hari / sudah tamat
     const taxTamat = v.roadtax < HARI_INI;                 // sudah luput
     return `<div class="veh">
@@ -971,7 +974,7 @@ function renderPemandu(){
     `<th style="${t===HARI_INI?'color:var(--amber-d)':''}">${HARI[i]}<br><span style="font-weight:400;text-transform:none">${fmtTarikh(t)}</span></th>`
   ).join("");
 
-  const rows = drivers.map(d => {
+  const rows = pemanduAktif().map(d => {
     const cells = MINGGU.map(tarikh => {
       const cls = tarikh === HARI_INI ? "today" : "";
       if(d.status === "cuti") return `<td class="${cls}"><span class="off">Cuti</span></td>`;
@@ -1018,23 +1021,35 @@ function updVehicle(id, key, val){
 function toggleDriver(id){
   const d = drv(id); d.status = d.status === "bertugas" ? "cuti" : "bertugas"; sync();
 }
-function complete(id){
+async function complete(id){
   const b = bookings.find(b => b.id === id);
-  b.status = "selesai";
-  b.masaSelesai = skrgStr();
-  const [tkhS, msS] = b.masaSelesai.split(" ");
-  if(!b.masaTamat) b.masaTamat = msS;
-  if(tkhS !== b.tarikh) b.tarikhTamat = tkhS;
-  sync(); notify(`Tempahan ${id} ditanda selesai pada ${fmtMasaSelesai(b.masaSelesai)}.`);
+  /* Mod demo / tiada API */
+  if(!apiAktif() || !TOKEN){
+    b.status = "selesai"; b.masaSelesai = skrgStr();
+    const [tkhS, msS] = b.masaSelesai.split(" ");
+    if(!b.masaTamat) b.masaTamat = msS;
+    if(tkhS !== b.tarikh) b.tarikhTamat = tkhS;
+    render(); notify(`Tempahan ${id} ditanda selesai (mod tempatan).`);
+    return;
+  }
+  /* Guna masa server, bukan masa peranti */
+  setSync("saving");
+  try{
+    const res = await api("bookingComplete", { id });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){ setSync("err"); notify(res.ralat || "Gagal menanda selesai."); return; }
+    Object.assign(b, res.booking);
+    setSync("ok"); render(); notify(`Tempahan ${id} ditanda selesai pada ${fmtMasaSelesai(b.masaSelesai)}.`);
+  }catch(e){ setSync("err"); notify("Gagal menghubungi pelayan."); }
 }
 
 /* ---------- Modal: proses kelulusan ---------- */
 function openApprove(id){
   const b = bookings.find(x => x.id === id);
-  const vehOpts = vehicles.filter(v => v.status !== "selenggara").map(v =>
+  const vehOpts = kenderaanAktif().filter(v => v.status !== "selenggara").map(v =>
     `<option value="${v.id}" ${v.kapasiti < b.penumpang ? "disabled" : ""}>${esc(v.plat)} · ${esc(v.model)} (${v.kapasiti} tempat)${v.kapasiti < b.penumpang ? " — kapasiti tidak mencukupi" : ""}</option>`
   ).join("");
-  const drvOpts = drivers.map(d =>
+  const drvOpts = pemanduAktif().map(d =>
     `<option value="${d.id}" ${d.status==="cuti" ? "disabled" : ""}>${esc(d.nama)}${d.status==="cuti" ? " — bercuti" : ""}</option>`
   ).join("");
 
@@ -1135,8 +1150,8 @@ function openForm(){
         <label class="fld"><span>Tujuan Perjalanan</span><input id="f-tujuan" placeholder="cth: Mesyuarat penyelarasan" oninput="checkForm()"></label>
         <label class="fld"><span>Destinasi</span><input id="f-destinasi" placeholder="cth: Putrajaya, Presint 4" oninput="checkForm()"></label>
         <div class="row2">
-          <label class="fld"><span>Tarikh Mula</span><input type="date" id="f-tarikh" value="${HARI_INI}" oninput="checkForm()"></label>
-          <label class="fld"><span>Tarikh Tamat <span style="text-transform:none;font-weight:400">(pilihan — untuk tempahan lebih sehari)</span></span><input type="date" id="f-tkh2" oninput="checkForm()"></label>
+          <label class="fld"><span>Tarikh Mula</span><input type="date" id="f-tarikh" value="${HARI_INI}" min="${HARI_INI}" oninput="checkForm()"></label>
+          <label class="fld"><span>Tarikh Tamat <span style="text-transform:none;font-weight:400">(pilihan — untuk tempahan lebih sehari)</span></span><input type="date" id="f-tkh2" min="${HARI_INI}" oninput="checkForm()"></label>
         </div>
         <div class="row4">
           <label class="fld"><span>Masa Mula</span><input type="time" id="f-mula" value="09:00" oninput="checkForm()"></label>
@@ -1156,12 +1171,14 @@ function checkForm(){
   const tkh = $("f-tarikh").value, tkh2 = $("f-tkh2").value;
   const sehari = !tkh2 || tkh2 === tkh;                 // tempahan hari yang sama
   const tarikhOK = !tkh2 || tkh2 >= tkh;                // tarikh tamat tidak boleh sebelum tarikh mula
+  const tidakLampau = !tkh || tkh >= HARI_INI;          // tarikh mula tidak boleh masa lampau
   const masaOK = !sehari || !tamat || mula < tamat;     // peraturan masa hanya untuk hari sama
   const valid = $("f-pemohon").value.trim() && $("f-bahagian").value.trim() &&
                 $("f-tujuan").value.trim() && $("f-destinasi").value.trim() &&
-                tkh && mula && tarikhOK && masaOK;
+                tkh && mula && tarikhOK && masaOK && tidakLampau;
   let mesej = `<span class="muted">Masa tamat boleh dibiarkan kosong — ia direkodkan automatik apabila pemandu menanda Selesai. Untuk tempahan bermalam / lebih sehari, isi Tarikh Tamat.</span>`;
-  if(!tarikhOK) mesej = `<span class="err">Tarikh tamat mesti pada atau selepas tarikh mula.</span>`;
+  if(!tidakLampau) mesej = `<span class="err">Tarikh tempahan tidak boleh pada masa lampau.</span>`;
+  else if(!tarikhOK) mesej = `<span class="err">Tarikh tamat mesti pada atau selepas tarikh mula.</span>`;
   else if(sehari && tamat && mula >= tamat) mesej = `<span class="err">Masa tamat mesti selepas masa mula.</span>`;
   $("f-err").innerHTML = mesej;
   $("f-ok").disabled = !valid;
@@ -1262,7 +1279,7 @@ function renderSelenggara(){
 
 function openSelForm(id){
   const s = id ? maintenance.find(x => x.id === id) : null;
-  const vOpts = vehicles.map(v =>
+  const vOpts = kenderaanAktif().map(v =>
     `<option value="${v.id}" ${s&&s.vehicleId===v.id?"selected":""}>${esc(v.plat)} — ${esc(v.model)}</option>`).join("");
   const jOpts = JENIS_SEL.map(j => `<option ${s&&s.jenis===j?"selected":""}>${j}</option>`).join("");
 
@@ -1484,7 +1501,7 @@ function openUserForm(){
         </div>
         <label class="fld"><span>Nama Penuh</span><input id="u-nm" placeholder="cth: En. Hafiz Rahman" oninput="checkUserForm()"></label>
         <label class="fld" id="u-drv-wrap" style="display:none"><span>Pautkan kepada Rekod Pemandu</span>
-          <select id="u-drv">${drivers.map(d => `<option value="${d.id}">${esc(d.nama)}</option>`).join("")}</select>
+          <select id="u-drv">${pemanduAktif().map(d => `<option value="${d.id}">${esc(d.nama)}</option>`).join("")}</select>
         </label>
         <div class="row2">
           <label class="fld"><span>Kata Laluan</span><input id="u-pw" type="password" oninput="checkUserForm()"></label>
@@ -1733,12 +1750,12 @@ function askDelVehicle(id){
       null);
     return;
   }
-  confirmModal("Padam Kenderaan",
-    `Anda pasti mahu memadam <b>${esc(v.plat)} — ${esc(v.model)}</b> daripada rekod kenderaan? Tindakan ini tidak boleh dibatalkan.`,
+  confirmModal("Arkibkan Kenderaan",
+    `Anda pasti mahu mengarkibkan <b>${esc(v.plat)} — ${esc(v.model)}</b>? Ia akan disembunyikan daripada senarai kenderaan, tetapi rekod sejarah & laporan kekal utuh.`,
     () => {
-      vehicles = vehicles.filter(x => x.id !== id);
-      closeModal(); sync(); notify(`Kenderaan ${v.plat} dipadam.`);
-    });
+      veh(id).status = "dipadam";       // soft-delete — kekalkan rujukan sejarah
+      closeModal(); sync(); notify(`Kenderaan ${v.plat} diarkibkan.`);
+    }, "🗑 Ya, Arkibkan", "btn-red");
 }
 
 /* ============================================================
@@ -1801,12 +1818,12 @@ function askDelDriver(id){
       null);
     return;
   }
-  confirmModal("Padam Pemandu",
-    `Anda pasti mahu memadam <b>${esc(d.nama)}</b> daripada senarai pemandu? Tindakan ini tidak boleh dibatalkan.`,
+  confirmModal("Arkibkan Pemandu",
+    `Anda pasti mahu mengarkibkan <b>${esc(d.nama)}</b>? Ia akan disembunyikan daripada senarai pemandu, tetapi rekod sejarah & laporan kekal utuh.`,
     () => {
-      drivers = drivers.filter(x => x.id !== id);
-      closeModal(); sync(); notify(`Pemandu ${d.nama} dipadam.`);
-    });
+      drv(id).status = "dipadam";       // soft-delete — kekalkan rujukan sejarah
+      closeModal(); sync(); notify(`Pemandu ${d.nama} diarkibkan.`);
+    }, "🗑 Ya, Arkibkan", "btn-red");
 }
 
 /* ---------- Modal pengesahan generik ---------- */

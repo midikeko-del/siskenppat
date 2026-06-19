@@ -333,6 +333,11 @@ function bookingAdd_(ss, user, b) {
   };
   if (!rec.pemohon || !rec.tujuan || !rec.destinasi || !rec.tarikh || !rec.masaMula)
     return { ok: false, ralat: "Maklumat tempahan tidak lengkap." };
+  const hariIni = nowKL_().slice(0, 10);
+  if (rec.tarikh < hariIni)
+    return { ok: false, ralat: "Tarikh tempahan tidak boleh pada masa lampau." };
+  if (rec.tarikhTamat && rec.tarikhTamat < rec.tarikh)
+    return { ok: false, ralat: "Tarikh tamat mesti pada atau selepas tarikh mula." };
   semua.unshift(rec);
   writeSheet_(ss, "Tempahan", semua);
   return { ok: true, booking: rec };
@@ -381,10 +386,14 @@ function bookingApprove_(ss, d) {
   const p = readSheet_(ss, "Pemandu").find(x => x.id === dId);
   if (!v) return { ok: false, ralat: "Kenderaan tidak dijumpai." };
   if (!p) return { ok: false, ralat: "Pemandu tidak dijumpai." };
+  if (v.status === "dipadam")
+    return { ok: false, ralat: "Kenderaan telah diarkibkan." };
   if (v.status === "selenggara")
     return { ok: false, ralat: "Kenderaan sedang dalam selenggaraan." };
   if (Number(v.kapasiti) < Number(b.penumpang))
     return { ok: false, ralat: "Kapasiti kenderaan tidak mencukupi." };
+  if (p.status === "dipadam")
+    return { ok: false, ralat: "Pemandu telah diarkibkan." };
   if (p.status === "cuti")
     return { ok: false, ralat: "Pemandu sedang bercuti." };
   // Konflik: tempahan diluluskan lain yang bertindih masa pada kenderaan/pemandu sama
