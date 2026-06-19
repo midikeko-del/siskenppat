@@ -6,6 +6,9 @@
 .clasprc.json
 gas/.clasprc.json
 
+# Folder deploy bersih (salinan fail frontend — dijana semula bila perlu)
+public/
+
 # Fail sementara / OS
 *.log
 Thumbs.db
