@@ -275,17 +275,24 @@ function klNow(){
   const g = (t) => parts.find(x => x.type === t).value;
   return { tarikh: `${g("year")}-${g("month")}-${g("day")}`, masa: `${g("hour")}:${g("minute")}` };
 }
-const HARI_INI = klNow().tarikh; // tarikh hari ini di Malaysia
-/* Minggu PENUH semasa (Ahad–Sabtu) dikira automatik — minggu Terengganu bermula Ahad */
-const MINGGU = (() => {
-  const [y, m, d] = HARI_INI.split("-").map(Number);
+/* Tambah n hari kepada tarikh ISO (yyyy-mm-dd) */
+function tambahHari(iso, n){
+  const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() - dt.getUTCDay()); // undur ke Ahad
-  return Array.from({ length: 7 }, (_, i) => {
-    const t = new Date(dt); t.setUTCDate(dt.getUTCDate() + i);
-    return t.toISOString().slice(0, 10);
-  });
-})();
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+/* HARI_INI & MINGGU dikira SEMULA setiap render (lihat render()) supaya tetap
+   betul walaupun app dibuka melepasi tengah malam tanpa reload. */
+let HARI_INI, MINGGU;
+function segarTarikh(){
+  HARI_INI = klNow().tarikh; // tarikh hari ini di Malaysia
+  // Minggu PENUH semasa (Ahad–Sabtu) — minggu Terengganu bermula Ahad
+  const hari = new Date(HARI_INI + "T00:00:00Z").getUTCDay(); // 0 = Ahad
+  const ahad = tambahHari(HARI_INI, -hari);
+  MINGGU = Array.from({ length: 7 }, (_, i) => tambahHari(ahad, i));
+}
+segarTarikh();
 const HARI = ["Ahad","Isnin","Selasa","Rabu","Khamis","Jumaat","Sabtu"];
 
 let vehicles = [
@@ -326,6 +333,7 @@ let nextSel = 6;
 let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
 let selFilter = "semua";
 let tab = "dashboard";
+let editVehId = null; // id kenderaan yang sedang diedit (null = tambah baharu)
 
 const VSTATUS = {
   tersedia:{label:"Tersedia", cls:"green"},
@@ -435,6 +443,7 @@ function setTab(t){ tab = t; render(); }
 
 /* ================= RENDER UTAMA ================= */
 function render(){
+  segarTarikh(); // pastikan HARI_INI & MINGGU sentiasa terkini
   renderNav();
   const m = $("main");
   if(!currentUser){ m.innerHTML = renderAwam(); return; }
@@ -808,12 +817,22 @@ function siapTugas(id){
     }, "✔ Ya, Sudah Selesai", "btn-green");
 }
 
+/* Status kenderaan dikira automatik: 'selenggara' ditetap admin; selainnya
+   'dalam_perjalanan' jika ada tempahan diluluskan meliputi masa kini, jika tidak 'tersedia'. */
+function statusKenderaan(v){
+  if(v.status === "selenggara") return "selenggara";
+  const k = klNow(); const skrg = `${k.tarikh} ${k.masa}`;
+  const sibuk = bookings.some(b => b.vehicleId === v.id && b.status === "diluluskan"
+    && mulaDT(b) <= skrg && skrg <= tamatDT(b));
+  return sibuk ? "dalam_perjalanan" : "tersedia";
+}
+
 /* ---------- PAPAN PEMUKA ---------- */
 function renderDashboard(){
   const s = {
-    tersedia: vehicles.filter(v=>v.status==="tersedia").length,
-    jalan: vehicles.filter(v=>v.status==="dalam_perjalanan").length,
-    sel: vehicles.filter(v=>v.status==="selenggara").length,
+    tersedia: vehicles.filter(v=>statusKenderaan(v)==="tersedia").length,
+    jalan: vehicles.filter(v=>statusKenderaan(v)==="dalam_perjalanan").length,
+    sel: vehicles.filter(v=>statusKenderaan(v)==="selenggara").length,
     tunggu: bookings.filter(b=>b.status==="menunggu").length,
   };
   const trips = bookings.filter(b => dudukiHari(b, HARI_INI) && (b.status==="diluluskan" || b.status==="selesai"));
@@ -826,7 +845,7 @@ function renderDashboard(){
         <span class="plat">${esc(v.plat)}</span>
         <div><div style="font-weight:600">${esc(v.model)}</div><div class="muted">${esc(v.jenis)}</div></div>
       </div></td>
-      <td>${chip(VSTATUS[v.status])}</td>
+      <td>${chip(VSTATUS[statusKenderaan(v)])}</td>
       <td style="color:var(--slate)">📍 ${esc(v.lokasi)}</td>
       <td style="color:var(--slate)">${trip ? `${esc(d.nama)} · <span class="muted">${esc(trip.destinasi)}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
     </tr>`;
@@ -904,7 +923,8 @@ function renderTempahan(){
 /* ---------- KENDERAAN ---------- */
 function renderKenderaan(){
   const cards = vehicles.map(v => {
-    const taxWarn = v.roadtax < "2026-09-01";
+    const taxWarn = v.roadtax <= tambahHari(HARI_INI, 60); // tamat dalam 60 hari / sudah tamat
+    const taxTamat = v.roadtax < HARI_INI;                 // sudah luput
     return `<div class="veh">
       <div class="veh-top">
         <div>
@@ -912,21 +932,20 @@ function renderKenderaan(){
           <h4>${esc(v.model)}</h4>
           <div class="typ">${esc(v.jenis)} · ${v.kapasiti} tempat duduk</div>
         </div>
-        ${chip(VSTATUS[v.status])}
+        ${chip(VSTATUS[statusKenderaan(v)])}
       </div>
       <div class="veh-stats">
         <div class="vs"><div class="n">${v.odometer.toLocaleString()} km</div><div class="t">Odometer</div></div>
         <div class="vs"><div class="n">${v.bahanApi}%</div><div class="t">Bahan Api</div></div>
         <div class="vs ${taxWarn?'warn':''}"><div class="n">${fmtTarikh(v.roadtax)}</div><div class="t">Cukai Jalan</div></div>
       </div>
-      ${taxWarn ? `<div class="alert">⚠️ Cukai jalan hampir tamat — sila perbaharui.</div>` : ""}
+      ${taxWarn ? `<div class="alert">⚠️ ${taxTamat ? "Cukai jalan TELAH TAMAT" : "Cukai jalan hampir tamat"} — sila perbaharui.</div>` : ""}
       <label class="fld"><span>Lokasi Semasa</span>
         <input value="${esc(v.lokasi)}" onchange="updVehicle('${v.id}','lokasi',this.value)">
       </label>
-      <label class="fld"><span>Status</span>
+      <label class="fld"><span>Status <span style="text-transform:none;font-weight:400">(Tersedia/Dalam Perjalanan dikira automatik)</span></span>
         <select onchange="updVehicle('${v.id}','status',this.value)">
-          <option value="tersedia" ${v.status==="tersedia"?"selected":""}>Tersedia</option>
-          <option value="dalam_perjalanan" ${v.status==="dalam_perjalanan"?"selected":""}>Dalam Perjalanan</option>
+          <option value="tersedia" ${v.status!=="selenggara"?"selected":""}>Dalam Khidmat</option>
           <option value="selenggara" ${v.status==="selenggara"?"selected":""}>Selenggaraan</option>
         </select>
       </label>
@@ -1061,16 +1080,45 @@ function checkClash(id){
   }
 }
 
-function doApprove(id){
+async function doApprove(id){
   const b = bookings.find(x => x.id === id);
-  b.status = "diluluskan";
-  b.vehicleId = $("ap-veh").value;
-  b.driverId = $("ap-drv").value;
-  closeModal(); sync(); notify(`Tempahan ${id} diluluskan.`);
+  const vId = $("ap-veh").value, dId = $("ap-drv").value;
+
+  /* Mod demo / tiada API */
+  if(!apiAktif() || !TOKEN){
+    b.status = "diluluskan"; b.vehicleId = vId; b.driverId = dId;
+    closeModal(); render(); notify(`Tempahan ${id} diluluskan (mod tempatan).`);
+    return;
+  }
+  /* Server sahkan konflik & kapasiti sebelum lulus */
+  const btn = $("ap-ok"); btn.disabled = true; btn.textContent = "Memproses…";
+  try{
+    const res = await api("bookingApprove", { id, vehicleId: vId, driverId: dId });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("ap-clash").innerHTML = `<div class="clash"><b>⚠️ ${esc(res.ralat || "Gagal meluluskan.")}</b></div>`;
+      btn.disabled = false; btn.textContent = "✔ Luluskan"; return;
+    }
+    Object.assign(b, res.booking);
+    closeModal(); render(); notify(`Tempahan ${id} diluluskan.`);
+  }catch(e){
+    $("ap-clash").innerHTML = `<div class="clash"><b>Gagal menghubungi pelayan.</b></div>`;
+    btn.disabled = false; btn.textContent = "✔ Luluskan";
+  }
 }
-function doReject(id){
-  bookings.find(x => x.id === id).status = "ditolak";
-  closeModal(); sync(); notify(`Tempahan ${id} ditolak.`);
+async function doReject(id){
+  const b = bookings.find(x => x.id === id);
+  if(!apiAktif() || !TOKEN){
+    b.status = "ditolak"; closeModal(); render(); notify(`Tempahan ${id} ditolak (mod tempatan).`);
+    return;
+  }
+  try{
+    const res = await api("bookingReject", { id });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){ notify(res.ralat || "Gagal menolak tempahan."); return; }
+    Object.assign(b, res.booking);
+    closeModal(); render(); notify(`Tempahan ${id} ditolak.`);
+  }catch(e){ notify("Gagal menghubungi pelayan."); }
 }
 
 /* ---------- Modal: tempahan baharu ---------- */
@@ -1598,6 +1646,7 @@ function closeModal(){ $("modal-root").innerHTML = ""; }
    TAMBAH / EDIT / PADAM KENDERAAN
    ============================================================ */
 function openVehForm(id){
+  editVehId = id || null;
   const v = id ? veh(id) : null;
   $("modal-root").innerHTML = `
   <div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -1629,8 +1678,7 @@ function openVehForm(id){
           <label class="fld"><span>Tamat Cukai Jalan</span><input type="date" id="v-tax" value="${v?v.roadtax:""}" oninput="checkVehForm()"></label>
           <label class="fld"><span>Status</span>
             <select id="v-status">
-              <option value="tersedia" ${!v||v.status==="tersedia"?"selected":""}>Tersedia</option>
-              <option value="dalam_perjalanan" ${v&&v.status==="dalam_perjalanan"?"selected":""}>Dalam Perjalanan</option>
+              <option value="tersedia" ${!v||v.status!=="selenggara"?"selected":""}>Dalam Khidmat</option>
               <option value="selenggara" ${v&&v.status==="selenggara"?"selected":""}>Selenggaraan</option>
             </select>
           </label>
@@ -1648,8 +1696,7 @@ function openVehForm(id){
 
 function checkVehForm(){
   const plat = $("v-plat").value.trim();
-  const dup = vehicles.some(v => v.plat.toLowerCase() === plat.toLowerCase() &&
-    !($("v-ok").getAttribute("onclick").includes(`'${v.id}'`)));
+  const dup = vehicles.some(v => v.plat.toLowerCase() === plat.toLowerCase() && v.id !== editVehId);
   const valid = plat && $("v-model").value.trim() && $("v-tax").value && parseInt($("v-kapasiti").value) > 0 && !dup;
   $("v-err").innerHTML = dup ? `<span class="err">No. pendaftaran ini sudah wujud dalam sistem.</span>` : "";
   $("v-ok").disabled = !valid;

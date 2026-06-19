@@ -229,6 +229,10 @@ function doPost(e) {
         res = bookingAdd_(ss, user, d.booking || {});
       } else if (d.action === "bookingComplete") {
         res = bookingComplete_(ss, user, d);
+      } else if (d.action === "bookingApprove") {
+        res = adminSahaja_(user) || bookingApprove_(ss, d);
+      } else if (d.action === "bookingReject") {
+        res = adminSahaja_(user) || bookingReject_(ss, d);
       } else if (d.action === "logout") {
         writeSheet_(ss, "Sesi", readSheet_(ss, "Sesi").filter(s => s.token !== d.token));
         res = { ok: true };
@@ -351,6 +355,60 @@ function bookingComplete_(ss, user, d) {
   const bhg = ms.split(" ");
   if (!b.masaTamat) b.masaTamat = bhg[1];
   if (bhg[0] !== b.tarikh) b.tarikhTamat = bhg[0];
+  writeSheet_(ss, "Tempahan", semua);
+  return { ok: true, booking: b };
+}
+
+/* ---------- Semakan pertindihan tempahan (tarikh + masa) ---------- */
+function tamatEf_(b)        { return b.masaTamat || "23:59"; }
+function tarikhTamatEf_(b)  { return b.tarikhTamat || b.tarikh; }
+function bertindih_(a, b) {
+  const aMula = a.tarikh + " " + a.masaMula, aTamat = tarikhTamatEf_(a) + " " + tamatEf_(a);
+  const bMula = b.tarikh + " " + b.masaMula, bTamat = tarikhTamatEf_(b) + " " + tamatEf_(b);
+  return aMula < bTamat && bMula < aTamat;
+}
+
+/* ---------- Luluskan tempahan (admin) — konflik disahkan di SERVER ---------- */
+function bookingApprove_(ss, d) {
+  const semua = readSheet_(ss, "Tempahan");
+  const b = semua.find(x => x.id === d.id);
+  if (!b) return { ok: false, ralat: "Tempahan tidak dijumpai." };
+  if (b.status !== "menunggu")
+    return { ok: false, ralat: "Hanya tempahan menunggu boleh diluluskan." };
+  const vId = String(d.vehicleId || ""), dId = String(d.driverId || "");
+  if (!vId || !dId) return { ok: false, ralat: "Sila pilih kenderaan dan pemandu." };
+  const v = readSheet_(ss, "Kenderaan").find(x => x.id === vId);
+  const p = readSheet_(ss, "Pemandu").find(x => x.id === dId);
+  if (!v) return { ok: false, ralat: "Kenderaan tidak dijumpai." };
+  if (!p) return { ok: false, ralat: "Pemandu tidak dijumpai." };
+  if (v.status === "selenggara")
+    return { ok: false, ralat: "Kenderaan sedang dalam selenggaraan." };
+  if (Number(v.kapasiti) < Number(b.penumpang))
+    return { ok: false, ralat: "Kapasiti kenderaan tidak mencukupi." };
+  if (p.status === "cuti")
+    return { ok: false, ralat: "Pemandu sedang bercuti." };
+  // Konflik: tempahan diluluskan lain yang bertindih masa pada kenderaan/pemandu sama
+  const konflik = semua.filter(x =>
+    x.id !== b.id && x.status === "diluluskan" &&
+    bertindih_(x, b) && (x.vehicleId === vId || x.driverId === dId));
+  if (konflik.length)
+    return { ok: false, ralat: "Konflik jadual dengan " + konflik.map(c => c.id).join(", ") +
+      " — kenderaan/pemandu sudah ditugaskan pada masa bertindih." };
+  b.status = "diluluskan";
+  b.vehicleId = vId;
+  b.driverId = dId;
+  writeSheet_(ss, "Tempahan", semua);
+  return { ok: true, booking: b };
+}
+
+/* ---------- Tolak tempahan (admin) ---------- */
+function bookingReject_(ss, d) {
+  const semua = readSheet_(ss, "Tempahan");
+  const b = semua.find(x => x.id === d.id);
+  if (!b) return { ok: false, ralat: "Tempahan tidak dijumpai." };
+  if (b.status !== "menunggu")
+    return { ok: false, ralat: "Hanya tempahan menunggu boleh ditolak." };
+  b.status = "ditolak";
   writeSheet_(ss, "Tempahan", semua);
   return { ok: true, booking: b };
 }
