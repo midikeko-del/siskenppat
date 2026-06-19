@@ -241,6 +241,8 @@ function doPost(e) {
         res = adminSahaja_(user) || bookingReject_(ss, user, d);
       } else if (d.action === "auditLog") {
         res = adminSahaja_(user) || { ok: true, log: readSheet_(ss, "Log").slice(-200).reverse() };
+      } else if (d.action === "logPurge") {
+        res = adminSahaja_(user) || logPurge_(ss, user);
       } else if (d.action === "logout") {
         writeSheet_(ss, "Sesi", readSheet_(ss, "Sesi").filter(s => s.token !== d.token));
         res = { ok: true };
@@ -348,6 +350,24 @@ function logAudit_(ss, userId, tindakan, tempahanId, butiran) {
   } catch (e) { /* jangan biar kegagalan log menggagalkan operasi utama */ }
 }
 
+/* Tarikh setahun lalu (zon KL) */
+function setahunLalu_() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return Utilities.formatDate(d, TZ, "yyyy-MM-dd");
+}
+
+/* ---------- Padam log audit melebihi 1 tahun (admin) ---------- */
+function logPurge_(ss, user) {
+  const cutoff = setahunLalu_();
+  const semua = readSheet_(ss, "Log");
+  const kekal = semua.filter(r => String(r.masa).slice(0, 10) >= cutoff);
+  const dibuang = semua.length - kekal.length;
+  writeSheet_(ss, "Log", kekal);
+  logAudit_(ss, user.userId, "Padam Log", "", dibuang + " rekod melebihi 1 tahun");
+  return { ok: true, dibuang: dibuang };
+}
+
 /* ---------- ID tempahan seterusnya (berdasarkan rekod sedia ada di server) ---------- */
 function nextBookingId_(semua) {
   let max = 1045;
@@ -396,7 +416,10 @@ function bookingAdd_(ss, user, b) {
   return { ok: true, booking: rec };
 }
 
-/* ---------- Tandakan tempahan selesai (admin ATAU pemandu yang ditugaskan sahaja) ---------- */
+/* ---------- Tandakan tempahan selesai (admin ATAU pemandu yang ditugaskan sahaja) ----------
+ * Pemandu WAJIB kemas kini odometer, bahan api & lokasi kenderaan.
+ * Admin boleh selesaikan tanpa input (kekal seperti asal).
+ */
 function bookingComplete_(ss, user, d) {
   const semua = readSheet_(ss, "Tempahan");
   const b = semua.find(x => x.id === d.id);
@@ -407,6 +430,34 @@ function bookingComplete_(ss, user, d) {
     return { ok: false, ralat: "Anda tidak dibenarkan menyelesaikan tempahan ini." };
   if (b.status !== "diluluskan")
     return { ok: false, ralat: "Hanya tempahan yang diluluskan boleh ditanda selesai." };
+
+  const adaOdo  = d.odometer !== undefined && d.odometer !== "" && d.odometer !== null;
+  const adaApi  = d.bahanApi !== undefined && d.bahanApi !== "" && d.bahanApi !== null;
+  const adaLok  = d.lokasi !== undefined && String(d.lokasi || "").trim() !== "";
+
+  // Pemandu wajib lengkapkan ketiga-tiga maklumat kenderaan
+  if (user.peranan === "pemandu" && (!adaOdo || !adaApi || !adaLok))
+    return { ok: false, ralat: "Sila lengkapkan odometer, bahan api dan lokasi kenderaan." };
+
+  // Kemas kini rekod kenderaan (jika ada input & tempahan ada kenderaan) — SAHKAN dahulu
+  let vehicleOut = null;
+  if (b.vehicleId && (adaOdo || adaApi || adaLok)) {
+    const vehs = readSheet_(ss, "Kenderaan");
+    const v = vehs.find(x => x.id === b.vehicleId);
+    if (v) {
+      if (adaOdo) {
+        const odoBaru = Number(d.odometer);
+        if (isNaN(odoBaru) || odoBaru < Number(v.odometer))
+          return { ok: false, ralat: "Odometer tidak boleh kurang daripada bacaan semasa (" + Number(v.odometer).toLocaleString() + " km)." };
+        v.odometer = odoBaru;
+      }
+      if (adaApi) v.bahanApi = Math.min(100, Math.max(0, Number(d.bahanApi) || 0));
+      if (adaLok) v.lokasi = String(d.lokasi).trim();
+      writeSheet_(ss, "Kenderaan", vehs);
+      vehicleOut = v;
+    }
+  }
+
   const ms = nowKL_();                 // masa server — client tidak boleh memalsukan masa
   b.status = "selesai";
   b.masaSelesai = ms;
@@ -414,8 +465,9 @@ function bookingComplete_(ss, user, d) {
   if (!b.masaTamat) b.masaTamat = bhg[1];
   if (bhg[0] !== b.tarikh) b.tarikhTamat = bhg[0];
   writeSheet_(ss, "Tempahan", semua);
-  logAudit_(ss, user.userId, "Selesai", b.id, b.masaSelesai);
-  return { ok: true, booking: b };
+  logAudit_(ss, user.userId, "Selesai", b.id,
+    vehicleOut ? ("odo " + vehicleOut.odometer + "km, api " + vehicleOut.bahanApi + "%") : b.masaSelesai);
+  return { ok: true, booking: b, vehicle: vehicleOut };
 }
 
 /* ---------- Semakan pertindihan tempahan (tarikh + masa) ---------- */

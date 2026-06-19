@@ -792,34 +792,73 @@ async function tukarStatusSaya(){
   notify(baru === "bertugas" ? "Status anda kini: Bertugas." : "Status anda kini: Cuti.");
 }
 
+/* Borang selesai tugasan — pemandu WAJIB kemas kini odometer, bahan api & lokasi */
 function siapTugas(id){
   const t = bookings.find(b => b.id === id);
-  confirmModal("Selesai Tugasan " + id,
-    `Sahkan tugasan ke <b>${esc(t.destinasi)}</b> telah selesai?<br><br>
-     Masa sebenar akan direkodkan oleh pelayan.<br>
-     Kenderaan dan jadual anda akan dibebaskan untuk tempahan baharu selepas ini.`,
-    async () => {
-      closeModal();
-      /* Mod demo / tiada API: kemas kini setempat sahaja */
-      if(!apiAktif() || !TOKEN){
-        t.status = "selesai"; t.masaSelesai = skrgStr();
-        const [tkhS, msS] = t.masaSelesai.split(" ");
-        if(!t.masaTamat) t.masaTamat = msS;
-        if(tkhS !== t.tarikh) t.tarikhTamat = tkhS;
-        render(); notify(`Tugasan ${id} selesai.`); return;
-      }
-      /* Server sahkan pemandu yang ditugaskan & rekod masa server */
-      setSync("saving");
-      try{
-        const res = await api("bookingComplete", { id });
-        if(res.sesiTamat){ sesiTamat(); return; }
-        if(!res.ok){ setSync("err"); notify(res.ralat || "Gagal menyelesaikan tugasan."); return; }
-        Object.assign(t, res.booking);
-        setSync("ok"); render(); notify(`Tugasan ${id} selesai. Terima kasih!`);
-      }catch(e){
-        setSync("err"); notify("Gagal menghubungi pelayan.");
-      }
-    }, "✔ Ya, Sudah Selesai", "btn-green");
+  const v = veh(t.vehicleId);
+  const odoMin = v ? v.odometer : 0;
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-h"><h3>Selesai Tugasan ${t.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="summary"><b>${esc(t.destinasi)}</b><br><span class="muted">${v ? esc(v.plat) + " — " + esc(v.model) : "Tiada kenderaan"}</span></div>
+        <p class="muted" style="font-size:13px;line-height:1.6">Sila kemas kini keadaan kenderaan selepas perjalanan. Masa selesai direkod automatik oleh pelayan.</p>
+        <div class="row2">
+          <label class="fld"><span>Odometer (km)</span><input type="number" id="sp-odo" value="${v ? v.odometer : ""}" min="${odoMin}" oninput="checkSiap(${odoMin})"></label>
+          <label class="fld"><span>Bahan Api (%)</span><input type="number" id="sp-fuel" value="${v ? v.bahanApi : ""}" min="0" max="100" oninput="checkSiap(${odoMin})"></label>
+        </div>
+        <label class="fld"><span>Lokasi Semasa Kenderaan</span><input id="sp-lok" value="${v ? esc(v.lokasi) : ""}" placeholder="cth: Garaj Utama, Aras B1" oninput="checkSiap(${odoMin})"></label>
+        <div id="sp-err"></div>
+        <button class="btn btn-green" id="sp-ok" style="justify-content:center" onclick="hantarSiap('${t.id}')">✔ Selesai & Kemas Kini Kenderaan</button>
+      </div>
+    </div>
+  </div>`;
+  checkSiap(odoMin);
+}
+
+function checkSiap(odoMin){
+  const odoVal = $("sp-odo").value, fuelVal = $("sp-fuel").value, lok = $("sp-lok").value.trim();
+  const odo = parseInt(odoVal), fuel = parseInt(fuelVal);
+  let err = "";
+  if(odoVal !== "" && !isNaN(odo) && odo < odoMin)
+    err = `Odometer tidak boleh kurang daripada bacaan semasa (${odoMin.toLocaleString()} km).`;
+  $("sp-err").innerHTML = err ? `<span class="err">${err}</span>` : "";
+  const valid = odoVal !== "" && !isNaN(odo) && odo >= odoMin &&
+                fuelVal !== "" && fuel >= 0 && fuel <= 100 && lok;
+  $("sp-ok").disabled = !valid;
+}
+
+async function hantarSiap(id){
+  const t = bookings.find(b => b.id === id);
+  const odo = parseInt($("sp-odo").value), fuel = parseInt($("sp-fuel").value), lok = $("sp-lok").value.trim();
+
+  /* Mod demo / tiada API: kemas kini setempat */
+  if(!apiAktif() || !TOKEN){
+    t.status = "selesai"; t.masaSelesai = skrgStr();
+    const [tkhS, msS] = t.masaSelesai.split(" ");
+    if(!t.masaTamat) t.masaTamat = msS;
+    if(tkhS !== t.tarikh) t.tarikhTamat = tkhS;
+    const v = veh(t.vehicleId); if(v){ v.odometer = odo; v.bahanApi = fuel; v.lokasi = lok; }
+    closeModal(); render(); notify(`Tugasan ${id} selesai (mod tempatan).`); return;
+  }
+
+  const btn = $("sp-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  setSync("saving");
+  try{
+    const res = await api("bookingComplete", { id, odometer: odo, bahanApi: fuel, lokasi: lok });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("sp-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal menyelesaikan tugasan.")}</span>`;
+      btn.disabled = false; btn.textContent = "✔ Selesai & Kemas Kini Kenderaan"; setSync("err"); return;
+    }
+    Object.assign(t, res.booking);
+    if(res.vehicle){ const v = veh(t.vehicleId); if(v) Object.assign(v, res.vehicle); }
+    setSync("ok"); closeModal(); render(); notify(`Tugasan ${id} selesai. Terima kasih!`);
+  }catch(e){
+    $("sp-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "✔ Selesai & Kemas Kini Kenderaan"; setSync("err");
+  }
 }
 
 /* Status kenderaan dikira automatik: 'selenggara' ditetap admin; selainnya
@@ -1676,7 +1715,10 @@ function renderLog(){
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <h2 class="sect">Log Audit</h2>
-      <button class="btn btn-dark" onclick="muatLog()">↻ Muat Semula</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-dark" onclick="muatLog()">↻ Muat Semula</button>
+        <button class="btn" style="border:1px solid var(--red-line);color:var(--red)" onclick="padamLogLama()">🗑 Padam log &gt;1 tahun</button>
+      </div>
     </div>
     <div class="card"><div class="tbl-scroll"><table>
       <thead><tr><th>Masa</th><th>Pengguna</th><th>Tindakan</th><th>Tempahan</th><th>Butiran</th></tr></thead>
@@ -1705,6 +1747,19 @@ async function muatLog(){
   }catch(e){
     b.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--red)">Gagal menghubungi pelayan.</td></tr>`;
   }
+}
+
+function padamLogLama(){
+  confirmModal("Padam Log Lama",
+    `Padam semua rekod log audit yang melebihi <b>1 tahun</b>? Rekod dalam tempoh setahun terakhir akan dikekalkan. Tindakan ini tidak boleh dibatalkan.`,
+    async () => {
+      try{
+        const res = await api("logPurge");
+        if(res.sesiTamat){ sesiTamat(); return; }
+        if(!res.ok){ closeModal(); notify(res.ralat || "Gagal memadam log."); return; }
+        closeModal(); muatLog(); notify(`${res.dibuang} rekod log lama dipadam.`);
+      }catch(e){ closeModal(); notify("Gagal menghubungi pelayan."); }
+    }, "🗑 Ya, Padam", "btn-red");
 }
 
 /* ============================================================
