@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SisKEN">
+<title>SisKEN — Sistem Tempahan Kenderaan | Perbadanan Perpustakaan Awam Terengganu</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink2:#1e293b; --slate:#64748b; --slate-l:#94a3b8;
+    --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --amber:#fbbf24; --amber-d:#d97706; --amber-bg:#fffbeb;
+    --green:#059669; --green-bg:#ecfdf5; --green-line:#a7f3d0;
+    --red:#e11d48; --red-bg:#fff1f2; --red-line:#fecdd3;
+    --sky:#0284c7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+  button{font-family:inherit;cursor:pointer;border:none;background:none}
+  input,select{font-family:inherit;font-size:14px;width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:8px 12px;background:#fff}
+  input:focus,select:focus{outline:2px solid var(--amber);border-color:var(--amber)}
+
+  /* ===== Pengepala ===== */
+  header{background:var(--ink);color:#fff}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+  .head-top{display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:42px;height:42px;border-radius:10px;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:22px}
+  .brand h1{font-size:17px;font-weight:700;line-height:1.2}
+  .brand p{font-size:12px;color:var(--slate-l)}
+  .admin{display:flex;align-items:center;gap:10px;text-align:right}
+  .admin .nm{font-size:13px;font-weight:600}
+  .admin .dt{font-size:11px;color:var(--slate-l)}
+  .avatar{width:36px;height:36px;border-radius:50%;background:#334155;color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .sync{font-size:11px;font-weight:600;padding:4px 11px;border-radius:99px;border:1px solid #334155;white-space:nowrap}
+  .sync.local{color:#94a3b8}
+  .sync.ok{color:#34d399;border-color:#065f46}
+  .sync.saving{color:#fbbf24;border-color:#92400e}
+  .sync.err{color:#fb7185;border-color:#9f1239}
+  .logout{font-size:13px;font-weight:600;color:#cbd5e1;border:1px solid #334155;border-radius:8px;padding:7px 12px;white-space:nowrap}
+  .logout:hover{background:#334155;color:#fff}
+
+  /* ===== Skrin log masuk ===== */
+  .login-bg{position:fixed;inset:0;background:linear-gradient(160deg,#0f172a 0%,#1e293b 100%);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+  .login-card{background:#fff;border-radius:20px;padding:34px 30px;width:100%;max-width:380px;display:grid;gap:14px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+  .login-logo{width:58px;height:58px;border-radius:14px;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto}
+  .login-card h2{text-align:center;font-size:22px}
+  .login-sub{text-align:center;font-size:13px;color:var(--slate);margin-top:-8px}
+  .login-note{font-size:13px;color:var(--slate);background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;line-height:1.6}
+  nav{display:flex;gap:4px;overflow-x:auto}
+  nav button{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:14px;font-weight:500;color:#cbd5e1;border-radius:10px 10px 0 0;white-space:nowrap}
+  nav button:hover{background:var(--ink2);color:#fff}
+  nav button.active{background:var(--bg);color:var(--ink)}
+  .badge{background:var(--amber);color:var(--ink);font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px}
+
+  main{max-width:1180px;margin:0 auto;padding:24px 20px;display:grid;gap:22px}
+  h2.sect{font-size:18px;font-weight:700}
+
+  /* ===== Kad & jadual ===== */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .card-h{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .card-h h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .muted{font-size:12px;color:var(--slate-l)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;align-items:center;gap:14px}
+  .stat .ic{font-size:26px}
+  .stat .v{font-size:26px;font-weight:800;line-height:1}
+  .stat .l{font-size:12px;color:var(--slate);margin-top:4px}
+  .c-green{color:var(--green)} .c-amber{color:var(--amber-d)} .c-red{color:var(--red)} .c-sky{color:var(--sky)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-l);padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:12px 16px;border-bottom:1px solid #f8fafc;vertical-align:top}
+  tr:hover td{background:#f8fafc}
+  .tbl-scroll{overflow-x:auto}
+
+  .plat{font-family:'Consolas','Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:.15em;background:var(--ink);color:var(--amber);padding:3px 9px;border-radius:6px;display:inline-block;white-space:nowrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid;white-space:nowrap}
+  .chip .dot{width:6px;height:6px;border-radius:50%}
+  .chip.green{background:var(--green-bg);color:var(--green);border-color:var(--green-line)} .chip.green .dot{background:var(--green)}
+  .chip.amber{background:var(--amber-bg);color:var(--amber-d);border-color:#fde68a} .chip.amber .dot{background:var(--amber-d)}
+  .chip.red{background:var(--red-bg);color:var(--red);border-color:var(--red-line)} .chip.red .dot{background:var(--red)}
+  .chip.gray{background:#f1f5f9;color:var(--slate);border-color:var(--line)} .chip.gray .dot{background:var(--slate)}
+
+  /* ===== Butang ===== */
+  .btn{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:9px 16px;border-radius:10px;transition:.15s}
+  .btn-amber{background:var(--amber);color:var(--ink)} .btn-amber:hover{background:#f59e0b}
+  .btn-dark{background:var(--ink);color:#fff} .btn-dark:hover{background:#334155}
+  .btn-green{background:var(--green);color:#fff;justify-content:center;flex:1} .btn-green:hover{background:#047857}
+  .btn-red{background:#fff;border:1px solid var(--red-line);color:var(--red);justify-content:center;flex:1} .btn-red:hover{background:var(--red-bg)}
+  .btn-sm{font-size:12px;padding:5px 11px;border-radius:8px;border:1px solid var(--green-line);color:var(--green);background:#fff}
+  .btn-sm:hover{background:var(--green-bg)}
+  .btn-edit{font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid #bae6fd;color:var(--sky);background:#fff}
+  .btn-edit:hover{background:#f0f9ff}
+  .btn-del{font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--red-line);color:var(--red);background:#fff}
+  .btn-del:hover{background:var(--red-bg)}
+  .act-row{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+  .confirm-txt{font-size:14px;color:var(--slate);line-height:1.6}
+
+  /* ===== Laporan ===== */
+  .rpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .rpt-stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .rpt-stat .v{font-size:22px;font-weight:800}
+  .rpt-stat .l{font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+  .kos{font-family:Consolas,monospace;font-weight:700;text-align:right}
+  tfoot td{font-weight:700;background:#f8fafc;border-top:2px solid var(--line)}
+  @media print{
+    header,nav,.no-print,button{display:none !important}
+    body{background:#fff}
+    main{padding:0;max-width:100%}
+    .card,.rpt-stat{border:1px solid #ccc;border-radius:0;break-inside:avoid}
+    .print-title{display:block !important}
+  }
+  .print-title{display:none;text-align:center;margin-bottom:10px}
+  .print-title h2{font-size:18px}
+  .print-title p{font-size:12px;color:#555}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* ===== Senarai tempahan ===== */
+  .bk{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .bk .id{font-family:Consolas,monospace;font-size:12px;font-weight:700;color:var(--slate-l)}
+  .bk h4{font-size:15px;font-weight:700;margin:4px 0 2px}
+  .bk .meta{font-size:13px;color:var(--slate)}
+  .bk .who{font-size:12px;color:var(--slate-l);margin-top:4px}
+  .bk .assign{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink2)}
+
+  /* ===== Kenderaan ===== */
+  .fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+  .veh{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:12px}
+  .veh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .veh h4{font-size:15px;font-weight:700;margin-top:8px}
+  .veh .typ{font-size:12px;color:var(--slate-l)}
+  .veh-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+  .vs{background:#f8fafc;border-radius:10px;padding:9px 4px}
+  .vs.warn{background:var(--red-bg)}
+  .vs .n{font-size:13px;font-weight:700}
+  .vs.warn .n{color:var(--red)}
+  .vs .t{font-size:11px;color:var(--slate-l)}
+  .alert{font-size:12px;color:var(--red);background:var(--red-bg);border-radius:10px;padding:9px 12px;display:flex;gap:7px;align-items:center}
+  label.fld{display:block}
+  label.fld span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--slate);margin-bottom:5px}
+
+  /* ===== Jadual pemandu ===== */
+  .sched td{min-width:116px}
+  .sched .today{background:var(--amber-bg)}
+  .duty{background:var(--ink);color:#fff;border-radius:10px;padding:8px 11px;margin-bottom:7px;font-size:12px}
+  .duty .tm{font-family:Consolas,monospace;font-weight:700;color:var(--amber);font-size:11px}
+  .duty .pl{color:var(--slate-l);font-size:11px}
+  .free{font-size:12px;color:var(--green)}
+  .off{font-size:12px;color:#cbd5e1;font-style:italic}
+  .drv-nm{font-weight:700}
+  .drv-info{font-size:12px;color:var(--slate-l);margin:3px 0 8px}
+  .toggle{font-size:12px;font-weight:600;padding:4px 12px;border-radius:99px;border:1px solid}
+  .toggle.on{background:var(--green-bg);color:var(--green);border-color:var(--green-line)}
+  .toggle.off2{background:#f1f5f9;color:var(--slate);border-color:var(--line)}
+
+  /* ===== Modal & toast ===== */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:40;display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{background:#fff;border-radius:18px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,.3)}
+  .modal-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff;border-radius:18px 18px 0 0}
+  .modal-h h3{font-size:16px;font-weight:700}
+  .modal-x{font-size:20px;color:var(--slate-l);line-height:1;padding:4px 8px}
+  .modal-x:hover{color:var(--ink)}
+  .modal-b{padding:20px;display:grid;gap:14px}
+  .summary{background:#f8fafc;border-radius:10px;padding:13px 15px;font-size:13px;color:var(--slate)}
+  .summary b{color:var(--ink);font-size:14px}
+  .clash{background:var(--red-bg);border:1px solid var(--red-line);border-radius:10px;padding:11px 14px;font-size:13px;color:var(--red)}
+  .clash p{font-size:12px;margin-top:4px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row4{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}
+  .err{font-size:12px;color:var(--red)}
+  .btn-row{display:flex;gap:10px}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:14px;padding:13px 22px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:50;display:none;align-items:center;gap:9px}
+  #toast.show{display:flex}
+
+  @media(max-width:640px){
+    .wrap{padding:0 12px}
+    main{padding:16px 12px;gap:16px}
+    .head-top{padding:10px 0;gap:8px}
+    .brand{gap:8px}
+    .brand h1{font-size:13.5px}
+    .brand p{font-size:9.5px;letter-spacing:.01em}
+    .logo{width:34px;height:34px;font-size:17px;border-radius:8px}
+    .admin{gap:8px}
+    .admin .nm,.admin .dt{display:none}
+    .avatar{width:30px;height:30px;font-size:13px}
+    .sync{font-size:10px;padding:3px 8px}
+    .logout{font-size:12px;padding:6px 10px}
+    nav button{padding:9px 12px;font-size:13px}
+    h2.sect{font-size:16px}
+    .stats{grid-template-columns:1fr 1fr;gap:10px}
+    .stat{padding:12px 13px;gap:10px}
+    .stat .ic{font-size:20px}
+    .stat .v{font-size:20px}
+    .stat .l{font-size:11px}
+    .card-h{padding:12px 14px}
+    th,td{padding:9px 10px}
+    .bk{flex-direction:column;padding:14px 16px}
+    .bk .btn{width:100%;justify-content:center}
+    .fleet{grid-template-columns:1fr}
+    .btn{font-size:13px;padding:9px 14px}
+    .modal{border-radius:14px;max-height:94vh}
+    .modal-b{padding:16px;gap:12px}
+    .row2{grid-template-columns:1fr}
+    .row4{grid-template-columns:1fr 1fr}
+    .rpt-grid{grid-template-columns:1fr 1fr;gap:10px}
+    .rpt-stat{padding:12px 13px}
+    .rpt-stat .v{font-size:18px}
+    .act-row{flex-wrap:wrap}
+    .login-card{padding:26px 22px;border-radius:16px}
+    input,select{font-size:16px} /* elak auto-zoom iOS semasa taip */
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="head-top">
+      <div class="brand">
+        <div class="logo">🚐</div>
+        <div>
+          <h1>SisKEN — Sistem Tempahan Kenderaan</h1>
+          <p>PERBADANAN PERPUSTAKAAN AWAM TERENGGANU · Bahagian Khidmat Pengurusan</p>
+        </div>
+      </div>
+      <div class="admin">
+        <div id="sync" class="sync local">⬤ Mod Tempatan</div>
+        <div>
+          <div class="nm" id="u-nama">—</div>
+          <div class="dt" id="u-peranan">Belum log masuk</div>
+        </div>
+        <div class="avatar" id="u-avatar">?</div>
+        <button class="logout no-print" id="btn-pw" onclick="openTukarPwSendiri()" title="Tukar kata laluan saya" style="display:none">🔑</button>
+        <button class="logout no-print" id="btn-auth" onclick="authBtn()">Login</button>
+      </div>
+    </div>
+    <nav id="nav"></nav>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<div id="modal-root"></div>
+<div id="login-root"></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   SAMBUNGAN GOOGLE SHEETS (Apps Script)
+   1. Deploy Code.gs sebagai Web App
+   2. Salin URL Web App (berakhir dengan /exec)
+   3. Tampal di bawah, gantikan teks GANTIKAN_URL_DI_SINI
+   Jika dibiarkan, app berjalan dalam mod tempatan (data
+   contoh, tidak disimpan).
+   ============================================================ */
+const API_URL = "https://script.google.com/macros/s/AKfycbzIv8zPV-KGmKJCTc345abS62abIGstMgYcDhvOVvvc6k03h3165g0GZzITa5iA0sHaeg/exec";
+
+/* ================= DATA ================= */
+/* ===== Tarikh & masa sebenar — zon Asia/Kuala_Lumpur (GMT+8) ===== */
+const pad2 = n => String(n).padStart(2, "0");
+function klNow(){
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date());
+  const g = (t) => parts.find(x => x.type === t).value;
+  return { tarikh: `${g("year")}-${g("month")}-${g("day")}`, masa: `${g("hour")}:${g("minute")}` };
+}
+const HARI_INI = klNow().tarikh; // tarikh hari ini di Malaysia
+/* Minggu PENUH semasa (Ahad–Sabtu) dikira automatik — minggu Terengganu bermula Ahad */
+const MINGGU = (() => {
+  const [y, m, d] = HARI_INI.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - dt.getUTCDay()); // undur ke Ahad
+  return Array.from({ length: 7 }, (_, i) => {
+    const t = new Date(dt); t.setUTCDate(dt.getUTCDate() + i);
+    return t.toISOString().slice(0, 10);
+  });
+})();
+const HARI = ["Ahad","Isnin","Selasa","Rabu","Khamis","Jumaat","Sabtu"];
+
+let vehicles = [
+  {id:"K1", plat:"WUM 3271", model:"Toyota Vellfire", jenis:"Kenderaan Rasmi", kapasiti:7, status:"tersedia", lokasi:"Garaj Utama, Aras B1", odometer:48210, roadtax:"2026-11-30", bahanApi:85},
+  {id:"K2", plat:"VFC 8842", model:"Proton Persona", jenis:"Kereta Pejabat", kapasiti:5, status:"dalam_perjalanan", lokasi:"Putrajaya — Presint 1", odometer:91450, roadtax:"2026-08-15", bahanApi:60},
+  {id:"K3", plat:"WXD 5190", model:"Toyota Hiace", jenis:"Van Jabatan", kapasiti:11, status:"tersedia", lokasi:"Garaj Utama, Aras B1", odometer:120300, roadtax:"2026-07-02", bahanApi:92},
+  {id:"K4", plat:"VHQ 2236", model:"Toyota Hilux", jenis:"Pacuan 4 Roda", kapasiti:5, status:"selenggara", lokasi:"Bengkel Panel — Cheras", odometer:156780, roadtax:"2027-01-19", bahanApi:40},
+  {id:"K5", plat:"WC 5012 Q", model:"Perodua Aruz", jenis:"Kereta Pejabat", kapasiti:7, status:"tersedia", lokasi:"Parkir Berbumbung, Blok C", odometer:33980, roadtax:"2026-09-08", bahanApi:75},
+];
+
+let drivers = [
+  {id:"P1", nama:"En. Azman bin Hashim", telefon:"012-338 4471", lesen:"D, E", status:"bertugas"},
+  {id:"P2", nama:"En. Ravi a/l Subramaniam", telefon:"017-220 9183", lesen:"D", status:"bertugas"},
+  {id:"P3", nama:"En. Mohd Faiz bin Omar", telefon:"019-774 5520", lesen:"D, E, GDL", status:"bertugas"},
+  {id:"P4", nama:"En. Lim Chee Keong", telefon:"011-1452 8830", lesen:"D", status:"cuti"},
+];
+
+let bookings = [
+  {id:"T-1042", pemohon:"Pn. Nurul Aina", bahagian:"Bahagian Khidmat Pengurusan", tujuan:"Mesyuarat Penyelarasan KPI", destinasi:"Putrajaya, Presint 1", tarikh:"2026-06-10", masaMula:"08:30", masaTamat:"13:00", penumpang:3, status:"diluluskan", vehicleId:"K2", driverId:"P1"},
+  {id:"T-1043", pemohon:"En. Hafiz Rahman", bahagian:"Unit Audit Dalam", tujuan:"Lawatan audit cawangan", destinasi:"Shah Alam, Seksyen 14", tarikh:"2026-06-11", masaMula:"09:00", masaTamat:"17:00", penumpang:4, status:"menunggu", vehicleId:null, driverId:null},
+  {id:"T-1044", pemohon:"Cik Tan Mei Ling", bahagian:"Bahagian Dasar & Perancangan", tujuan:"Bengkel pemurnian pelan strategik", destinasi:"Port Dickson", tarikh:"2026-06-12", masaMula:"07:30", masaTamat:"18:30", penumpang:9, status:"menunggu", vehicleId:null, driverId:null},
+  {id:"T-1041", pemohon:"En. Syafiq Idris", bahagian:"Unit Komunikasi Korporat", tujuan:"Liputan majlis perasmian", destinasi:"KLCC, Kuala Lumpur", tarikh:"2026-06-09", masaMula:"13:00", masaTamat:"17:30", penumpang:2, status:"selesai", vehicleId:"K5", driverId:"P2"},
+  {id:"T-1045", pemohon:"Pn. Salmah Yusof", bahagian:"Bahagian Kewangan", tujuan:"Urusan perbendaharaan", destinasi:"Kompleks Kementerian Kewangan, Putrajaya", tarikh:"2026-06-11", masaMula:"10:00", masaTamat:"12:30", penumpang:2, status:"menunggu", vehicleId:null, driverId:null},
+];
+
+let maintenance = [
+  {id:"S1", vehicleId:"K4", tarikh:"2026-06-05", jenis:"Servis Berkala", butiran:"Servis 155,000 km — tukar minyak enjin, penapis & semakan brek", kos:850, odometer:156780, bengkel:"Bengkel Panel — Cheras", status:"dalam_proses"},
+  {id:"S2", vehicleId:"K2", tarikh:"2026-05-18", jenis:"Tayar", butiran:"Tukar 4 tayar baharu + penjajaran (alignment) & pengimbangan", kos:1280, odometer:90100, bengkel:"Syarikat Tayar Maju Sdn Bhd", status:"selesai"},
+  {id:"S3", vehicleId:"K3", tarikh:"2026-05-02", jenis:"Servis Berkala", butiran:"Servis 118,000 km — minyak enjin, penapis udara & gear box", kos:620, odometer:118020, bengkel:"Pusat Servis Toyota, Cheras", status:"selesai"},
+  {id:"S4", vehicleId:"K1", tarikh:"2026-04-22", jenis:"Elektrikal", butiran:"Ganti bateri & semakan sistem pengecasan", kos:540, odometer:47100, bengkel:"Pusat Servis Toyota, Cheras", status:"selesai"},
+  {id:"S5", vehicleId:"K5", tarikh:"2026-06-20", jenis:"Servis Berkala", butiran:"Servis berjadual 35,000 km", kos:0, odometer:33980, bengkel:"Pusat Servis Perodua, Sg. Besi", status:"dijadual"},
+];
+
+let nextNum = 1046;
+let nextVeh = 6;
+let nextDrv = 5;
+let nextSel = 6;
+let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
+let selFilter = "semua";
+let tab = "dashboard";
+
+const VSTATUS = {
+  tersedia:{label:"Tersedia", cls:"green"},
+  dalam_perjalanan:{label:"Dalam Perjalanan", cls:"amber"},
+  selenggara:{label:"Selenggaraan", cls:"red"},
+};
+const BSTATUS = {
+  menunggu:{label:"Menunggu Kelulusan", cls:"amber"},
+  diluluskan:{label:"Diluluskan", cls:"green"},
+  ditolak:{label:"Ditolak", cls:"red"},
+  selesai:{label:"Selesai", cls:"gray"},
+};
+const SSTATUS = {
+  dijadual:{label:"Dijadualkan", cls:"amber"},
+  dalam_proses:{label:"Dalam Proses", cls:"red"},
+  selesai:{label:"Selesai", cls:"green"},
+};
+const JENIS_SEL = ["Servis Berkala","Tayar","Brek","Elektrikal","Penghawa Dingin","Badan / Cat","Enjin / Transmisi","Lain-lain"];
+
+/* ================= UTILITI ================= */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const overlap = (a1,a2,b1,b2) => a1 < b2 && b1 < a2;
+/* Jika masa tamat kosong, tempahan dianggap berjalan sehingga pemandu tekan Selesai
+   (untuk semakan konflik, ia menghalang sehingga 23:59 atau sehingga ditanda selesai) */
+const tamatEf = (b) => b.masaTamat || "23:59";
+const paparMasa = (b) => b.masaTamat ? `${b.masaMula}–${b.masaTamat}` : `${b.masaMula} → <i style="font-weight:400">(belum tamat)</i>`;
+/* Sokongan tempahan berbilang hari */
+const tarikhTamatEf = (b) => b.tarikhTamat || b.tarikh;                       // tarikh hujung efektif
+const mulaDT  = (b) => `${b.tarikh} ${b.masaMula}`;                           // titik mula (tarikh+masa)
+const tamatDT = (b) => `${tarikhTamatEf(b)} ${tamatEf(b)}`;                   // titik tamat (tarikh+masa)
+const dudukiHari = (b, hari) => b.tarikh <= hari && hari <= tarikhTamatEf(b); // adakah tempahan meliputi hari ini?
+const paparTarikh = (b) => (b.tarikhTamat && b.tarikhTamat !== b.tarikh)
+  ? `${fmtTarikh(b.tarikh)} – ${fmtTarikh(b.tarikhTamat)}`
+  : fmtTarikh(b.tarikh);
+const veh = (id) => vehicles.find(v => v.id === id);
+const drv = (id) => drivers.find(d => d.id === id);
+
+function fmtTarikh(iso){
+  const bln = ["Jan","Feb","Mac","Apr","Mei","Jun","Jul","Ogo","Sep","Okt","Nov","Dis"];
+  const [y,m,d] = iso.split("-");
+  return `${parseInt(d)} ${bln[parseInt(m)-1]} ${y}`;
+}
+
+const chip = (cfg) => `<span class="chip ${cfg.cls}"><span class="dot"></span>${cfg.label}</span>`;
+const rm = (n) => "RM " + n.toLocaleString("ms-MY", {minimumFractionDigits:2});
+/* Jumlah jam sebenar tempahan, termasuk yang merentas hari */
+const jamTempahan = (b) => {
+  if(!b.masaTamat) return 0; // masih berjalan
+  const a = new Date(`${b.tarikh}T${b.masaMula}:00`);
+  const z = new Date(`${tarikhTamatEf(b)}T${b.masaTamat}:00`);
+  return Math.max(0, (z - a) / 3600000);
+};
+const jam = (m1, m2) => {
+  if(!m1 || !m2) return 0; // tempahan masih berjalan (belum ada masa tamat)
+  const [h1,n1] = m1.split(":").map(Number), [h2,n2] = m2.split(":").map(Number);
+  return Math.max(0, (h2*60+n2 - h1*60-n1) / 60);
+};
+const fmtBulan = (ym) => {
+  const bln = ["Januari","Februari","Mac","April","Mei","Jun","Julai","Ogos","September","Oktober","November","Disember"];
+  const [y,m] = ym.split("-");
+  return `${bln[parseInt(m)-1]} ${y}`;
+};
+
+function notify(msg){
+  const t = $("toast");
+  t.innerHTML = `<span style="color:#34d399">✔</span> ${esc(msg)}`;
+  t.classList.add("show");
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+/* Semakan konflik: tempahan diluluskan yang bertindih tarikh & masa pada kenderaan/pemandu sama */
+function conflicts(booking, vehicleId, driverId){
+  // Konflik = julat (tarikh mula + masa mula) hingga (tarikh tamat + masa tamat) bertindih.
+  // Tempahan berbilang hari menyekat KESEMUA hari dalam julatnya.
+  return bookings.filter(b =>
+    b.id !== booking.id &&
+    b.status === "diluluskan" &&
+    mulaDT(b) < tamatDT(booking) && mulaDT(booking) < tamatDT(b) &&
+    (b.vehicleId === vehicleId || b.driverId === driverId)
+  );
+}
+
+/* ================= NAVIGASI ================= */
+function renderNav(){
+  if(!currentUser){ $("nav").innerHTML = ""; return; }
+  const menunggu = bookings.filter(b => b.status === "menunggu").length;
+  const semua = [
+    {id:"dashboard", label:"📊 Papan Pemuka", admin:true},
+    {id:"tempahan", label:"📅 Tempahan", badge: isAdmin() ? menunggu : 0},
+    {id:"kenderaan", label:"🚗 Kenderaan", admin:true},
+    {id:"pemandu", label:"👥 Jadual Pemandu", admin:true},
+    {id:"selenggara", label:"🔧 Selenggaraan", admin:true},
+    {id:"laporan", label:"📈 Laporan Bulanan", admin:true},
+    {id:"pengguna", label:"🔐 Pengguna", admin:true},
+  ];
+  const items = currentUser.peranan === "pemandu"
+    ? [{id:"tugasan", label:"🚘 Tugasan Saya"}]
+    : semua.filter(n => !n.admin || isAdmin());
+  $("nav").innerHTML = items.map(n => `
+    <button class="${tab===n.id?'active':''}" onclick="setTab('${n.id}')">
+      ${n.label}${n.badge ? `<span class="badge">${n.badge}</span>` : ""}
+    </button>`).join("");
+}
+function setTab(t){ tab = t; render(); }
+
+/* ================= RENDER UTAMA ================= */
+function render(){
+  renderNav();
+  const m = $("main");
+  if(!currentUser){ m.innerHTML = renderAwam(); return; }
+  if(tab === "dashboard") m.innerHTML = renderDashboard();
+  if(tab === "tempahan") m.innerHTML = renderTempahan();
+  if(tab === "kenderaan") m.innerHTML = renderKenderaan();
+  if(tab === "pemandu") m.innerHTML = renderPemandu();
+  if(tab === "selenggara") m.innerHTML = renderSelenggara();
+  if(tab === "laporan") m.innerHTML = renderLaporan();
+  if(tab === "pengguna") m.innerHTML = renderPengguna();
+  if(tab === "tugasan") m.innerHTML = renderTugasan();
+}
+
+/* ============================================================
+   SAMBUNGAN API (Apps Script) + LOG MASUK
+   ============================================================ */
+const apiAktif = () => API_URL.startsWith("http");
+let TOKEN = null;
+let currentUser = null;
+let users = [];
+const isAdmin = () => currentUser && currentUser.peranan === "admin";
+
+async function api(action, payload = {}){
+  const r = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // elak isu CORS preflight
+    body: JSON.stringify({ action, token: TOKEN, ...payload }),
+  });
+  return await r.json();
+}
+
+function setSync(mode){
+  const el = $("sync");
+  const cfg = {
+    local:  ["local", "⬤ Mod Tempatan"],
+    loading:["saving","⬤ Memuatkan…"],
+    saving: ["saving","⬤ Menyimpan…"],
+    ok:     ["ok",    "⬤ Online"],
+    err:    ["err",   "⬤ Gagal sambung — data tidak disimpan"],
+  }[mode];
+  el.className = "sync " + cfg[0];
+  el.textContent = cfg[1];
+}
+
+function dataKosong(d){
+  return ["vehicles","drivers","bookings","maintenance"].every(k => !d[k] || d[k].length === 0);
+}
+
+function pakaiData(d){
+  vehicles = d.vehicles || [];
+  drivers = d.drivers || [];
+  bookings = d.bookings || [];
+  maintenance = d.maintenance || [];
+  if(d.users) users = d.users;
+  if(d.counters){
+    nextNum = d.counters.nextNum || nextNum;
+    nextVeh = d.counters.nextVeh || nextVeh;
+    nextDrv = d.counters.nextDrv || nextDrv;
+    nextSel = d.counters.nextSel || nextSel;
+  }
+}
+
+/* Simpan automatik (debounce 600ms supaya tidak membanjiri API) */
+let _saveTm = null;
+function sync(){
+  render();
+  if(!apiAktif() || !TOKEN){ setSync("local"); return; }
+  setSync("saving");
+  clearTimeout(_saveTm);
+  _saveTm = setTimeout(saveNow, 600);
+}
+
+async function saveNow(){
+  if(!apiAktif() || !TOKEN) return;
+  try{
+    const res = await api("save", { data: {
+      vehicles, drivers, bookings, maintenance,
+      counters: { nextNum, nextVeh, nextDrv, nextSel },
+    }});
+    if(res.sesiTamat){ sesiTamat(); return; }
+    setSync(res.ok ? "ok" : "err");
+  }catch(e){ setSync("err"); }
+}
+
+/* ============================================================
+   SKRIN LOG MASUK
+   ============================================================ */
+function renderLogin(){
+  $("login-root").innerHTML = `
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">🚐</div>
+      <h2>SisKEN</h2>
+      <p class="login-sub">Sistem Tempahan Kenderaan<br>PERBADANAN PERPUSTAKAAN AWAM TERENGGANU</p>
+      ${apiAktif() ? `
+        <label class="fld"><span>ID Pengguna</span><input id="lg-id" autocomplete="username" placeholder="cth: admin" onkeydown="if(event.key==='Enter')doLogin()"></label>
+        <label class="fld"><span>Kata Laluan</span><input id="lg-pw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></label>
+        <div id="lg-err"></div>
+        <button class="btn btn-amber" id="lg-ok" style="justify-content:center;width:100%" onclick="doLogin()">Log Masuk</button>
+        <button class="btn" style="justify-content:center;width:100%;color:var(--slate)" onclick="$('login-root').innerHTML=''">‹ Kembali ke paparan umum</button>
+      ` : `
+        <div class="login-note">⚠️ Sambungan Google Sheets belum ditetapkan (API_URL), jadi log masuk sebenar belum aktif. Anda boleh masuk dalam <b>mod demo</b> dengan data contoh — data tidak akan disimpan.</div>
+        <button class="btn btn-amber" style="justify-content:center;width:100%" onclick="demoLogin()">Masuk Mod Demo (Admin)</button>
+        <button class="btn" style="justify-content:center;width:100%;color:var(--slate)" onclick="$('login-root').innerHTML=''">‹ Kembali ke paparan umum</button>
+      `}
+    </div>
+  </div>`;
+  if(apiAktif()) setTimeout(() => { const el = $("lg-id"); if(el) el.focus(); }, 50);
+}
+
+async function doLogin(){
+  const id = $("lg-id").value.trim(), pw = $("lg-pw").value;
+  if(!id || !pw){ $("lg-err").innerHTML = '<span class="err">Sila isi ID pengguna dan kata laluan.</span>'; return; }
+  const btn = $("lg-ok"); btn.disabled = true; btn.textContent = "Menyemak…";
+  try{
+    const res = await api("login", { userId: id, password: pw });
+    if(!res.ok){
+      $("lg-err").innerHTML = `<span class="err">${esc(res.ralat || "Log masuk gagal.")}</span>`;
+      btn.disabled = false; btn.textContent = "Log Masuk"; return;
+    }
+    TOKEN = res.token;
+    currentUser = res.user;
+    if(res.data){
+      if(dataKosong(res.data) && currentUser.peranan === "admin"){
+        if(res.data.users) users = res.data.users;
+        saveNow(); // sheet masih kosong & admin — hantar data contoh sebagai permulaan
+      } else pakaiData(res.data);
+    }
+    masukApp();
+    setSync("ok");
+  }catch(e){
+    $("lg-err").innerHTML = '<span class="err">Tidak dapat menghubungi pelayan. Semak API_URL dan sambungan internet.</span>';
+    btn.disabled = false; btn.textContent = "Log Masuk";
+  }
+}
+
+function demoLogin(){
+  currentUser = { userId: "demo", nama: "Admin (Demo)", peranan: "admin" };
+  masukApp();
+  setSync("local");
+}
+
+function masukApp(){
+  $("login-root").innerHTML = "";
+  $("u-nama").textContent = currentUser.nama;
+  $("u-peranan").textContent = currentUser.peranan === "admin" ? "Admin" : (currentUser.peranan === "pemandu" ? "Pemandu" : "Pemohon");
+  $("u-avatar").textContent = currentUser.nama.replace(/^(En\.|Pn\.|Cik|Dr\.)\s*/i, "").charAt(0).toUpperCase() || "?";
+  tab = isAdmin() ? "dashboard" : (currentUser.peranan === "pemandu" ? "tugasan" : "tempahan");
+  $("btn-auth").textContent = "⎋ Keluar";
+  $("btn-pw").style.display = (apiAktif() && TOKEN) ? "" : "none"; // mod demo tiada kata laluan
+  render();
+}
+
+function sesiTamat(){
+  TOKEN = null; currentUser = null; users = [];
+  $("u-nama").textContent = "—";
+  $("u-peranan").textContent = "Belum log masuk";
+  $("u-avatar").textContent = "?";
+  $("btn-auth").textContent = "Login";
+  $("btn-pw").style.display = "none";
+  render();
+  renderLogin();
+  notify("Sesi anda telah tamat. Sila log masuk semula.");
+}
+
+async function doLogout(){
+  if(!currentUser) return;
+  if(TOKEN){ try{ api("logout"); }catch(e){} }
+  TOKEN = null; currentUser = null; users = [];
+  $("u-nama").textContent = "—";
+  $("u-peranan").textContent = "Belum log masuk";
+  $("u-avatar").textContent = "?";
+  $("btn-auth").textContent = "Login";
+  $("btn-pw").style.display = "none";
+  mulaApp(); // kembali ke paparan umum (data disanitasi semula)
+}
+
+function authBtn(){ currentUser ? doLogout() : renderLogin(); }
+
+/* ============================================================
+   PAPARAN UMUM (sebelum log masuk)
+   ============================================================ */
+async function mulaApp(){
+  if(apiAktif()){
+    setSync("loading");
+    try{
+      const res = await api("awam");
+      if(res.ok && res.data){
+        bookings = res.data.bookings || [];
+        drivers = res.data.drivers || [];
+        vehicles = res.data.vehicles || [];
+        setSync("ok");
+      } else setSync("err");
+    }catch(e){ setSync("err"); }
+  } else setSync("local");
+  render();
+}
+
+function renderAwam(){
+  const akan = bookings
+    .filter(b => b.status === "diluluskan" && tarikhTamatEf(b) >= HARI_INI)
+    .sort((a,b) => (a.tarikh + a.masaMula).localeCompare(b.tarikh + b.masaMula));
+
+  const rows = akan.length === 0
+    ? `<div style="padding:30px;text-align:center;color:var(--slate-l);font-size:14px">Tiada tempahan sedang berjalan buat masa ini.</div>`
+    : akan.map(t => {
+        const v = veh(t.vehicleId), d = drv(t.driverId);
+        return `<div style="padding:14px 20px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+          <div style="min-width:120px">
+            <div style="font-weight:700;font-size:13px">${paparTarikh(t)}</div>
+            <div style="font-family:Consolas,monospace;font-size:13px;color:var(--slate)">${paparMasa(t)}</div>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="font-weight:600">${esc(t.tujuan)}</div>
+            <div class="muted">${esc(t.destinasi)}${t.bahagian ? " · " + esc(t.bahagian) : ""}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            ${v ? `<span class="plat">${esc(v.plat)}</span>` : ""}
+            <span style="font-size:13px;color:var(--slate)">${d ? esc(d.nama) : ""}</span>
+            ${chip(BSTATUS[t.status])}
+          </div>
+        </div>`;
+      }).join("");
+
+  const head = MINGGU.map((t,i) =>
+    `<th style="${t===HARI_INI?'color:var(--amber-d)':''}">${HARI[i]}<br><span style="font-weight:400;text-transform:none">${fmtTarikh(t)}</span></th>`).join("");
+  const gRows = drivers.map(d => {
+    const cells = MINGGU.map(tarikh => {
+      const cls = tarikh === HARI_INI ? "today" : "";
+      if(d.status === "cuti") return `<td class="${cls}"><span class="off">Cuti</span></td>`;
+      const tugas = bookings.filter(b => b.driverId === d.id && dudukiHari(b, tarikh) && (b.status==="diluluskan"||b.status==="selesai"));
+      if(tugas.length === 0) return `<td class="${cls}"><span class="free">Kosong</span></td>`;
+      return `<td class="${cls}">${tugas.map(t => {
+        const v = veh(t.vehicleId);
+        return `<div class="duty"><div class="tm">${paparMasa(t)}</div><div>${esc(t.destinasi)}</div><div class="pl">${v?esc(v.plat):""}</div></div>`;
+      }).join("")}</td>`;
+    }).join("");
+    return `<tr><td style="min-width:180px"><div class="drv-nm">${esc(d.nama)}</div>
+      <span class="toggle ${d.status==='bertugas'?'on':'off2'}" style="margin-top:6px;display:inline-block">${d.status==='bertugas'?'● Bertugas':'○ Cuti'}</span></td>${cells}</tr>`;
+  }).join("");
+
+  return `
+    <div class="card">
+      <div class="card-h"><h3>🛣️ Tempahan Sedang Berjalan & Akan Datang</h3><span class="muted">Hari ini: ${fmtTarikh(HARI_INI)}</span></div>
+      ${rows}
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>👥 Jadual Pemandu Minggu Ini</h3></div>
+      <div class="tbl-scroll"><table class="sched"><thead><tr><th>Pemandu</th>${head}</tr></thead><tbody>${gRows}</tbody></table></div>
+    </div>`;
+}
+
+/* ============================================================
+   TUGASAN PEMANDU
+   ============================================================ */
+function skrgStr(){
+  const k = klNow(); // masa zon Kuala Lumpur, bukan masa peranti
+  return `${k.tarikh} ${k.masa}`;
+}
+function fmtMasaSelesai(s){
+  const [t, m] = String(s).split(" ");
+  return t && m ? `${fmtTarikh(t)}, ${m}` : esc(String(s));
+}
+
+function renderTugasan(){
+  const me = currentUser.driverId;
+  if(!me) return `<h2 class="sect">Tugasan Saya</h2>
+    <div class="card"><div style="padding:30px;color:var(--slate);font-size:14px;line-height:1.7">
+      Akaun anda belum dipautkan kepada mana-mana rekod pemandu.<br>Sila hubungi admin untuk memautkan akaun ini kepada rekod pemandu anda.
+    </div></div>`;
+
+  const semua = bookings
+    .filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"))
+    .sort((a,b) => (a.tarikh + a.masaMula).localeCompare(b.tarikh + b.masaMula));
+  const aktif = semua.filter(b => b.status === "diluluskan");
+  const sejarah = semua.filter(b => b.status === "selesai").reverse().slice(0, 10);
+
+  const kad = (t, butang) => {
+    const v = veh(t.vehicleId);
+    return `<div class="bk">
+      <div style="flex:1;min-width:240px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="id">${t.id}</span>${chip(BSTATUS[t.status])}</div>
+        <h4>${esc(t.tujuan)}</h4>
+        <div class="meta">📍 ${esc(t.destinasi)} &nbsp;·&nbsp; ${paparTarikh(t)}, ${paparMasa(t)} &nbsp;·&nbsp; ${t.penumpang} penumpang</div>
+        <div class="who">${esc(t.pemohon || "")}${t.bahagian ? " — " + esc(t.bahagian) : ""}</div>
+        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}</div>` : ""}
+        ${t.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(t.masaSelesai)}</div>` : ""}
+      </div>
+      ${butang ? `<div><button class="btn btn-green" style="flex:none" onclick="siapTugas('${t.id}')">✔ Tandakan Selesai</button></div>` : ""}
+    </div>`;
+  };
+
+  const saya = drv(me);
+  const statusPanel = saya ? `
+    <div class="card"><div style="padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:700">Status Saya: ${saya.status === "bertugas" ? "Bertugas" : "Cuti"}</div>
+        <div class="muted">Status ini dikemas kini secara langsung pada jadual pemandu dan paparan umum.</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${chip(saya.status === "bertugas" ? {label:"● Bertugas", cls:"green"} : {label:"○ Cuti", cls:"gray"})}
+        <button class="btn ${saya.status === "bertugas" ? "btn-dark" : "btn-amber"}" onclick="tukarStatusSaya()">
+          ${saya.status === "bertugas" ? "Tukar ke Cuti" : "Tukar ke Bertugas"}
+        </button>
+      </div>
+    </div></div>` : "";
+
+  return `
+    <h2 class="sect">Tugasan Saya — ${esc(saya ? saya.nama : currentUser.nama)}</h2>
+    ${statusPanel}
+    ${aktif.length === 0
+      ? `<div class="card" style="padding:32px;text-align:center;color:var(--slate-l)">Tiada tugasan aktif buat masa ini. 👍</div>`
+      : `<div style="display:grid;gap:14px">${aktif.map(t => kad(t, true)).join("")}</div>`}
+    ${sejarah.length ? `<h2 class="sect" style="margin-top:8px">Sejarah Selesai (10 terkini)</h2>
+      <div style="display:grid;gap:14px">${sejarah.map(t => kad(t, false)).join("")}</div>` : ""}`;
+}
+
+async function tukarStatusSaya(){
+  const d = drv(currentUser.driverId);
+  if(!d) return;
+  const baru = d.status === "bertugas" ? "cuti" : "bertugas";
+  d.status = baru;
+  render();
+  if(apiAktif() && TOKEN){
+    setSync("saving");
+    try{
+      const res = await api("drvStatus", { status: baru });
+      if(res.sesiTamat){ sesiTamat(); return; }
+      if(!res.ok){
+        d.status = baru === "bertugas" ? "cuti" : "bertugas"; // kembalikan jika gagal
+        render(); setSync("err"); notify(res.ralat || "Gagal mengemas kini status.");
+        return;
+      }
+      setSync("ok");
+    }catch(e){
+      d.status = baru === "bertugas" ? "cuti" : "bertugas";
+      render(); setSync("err"); notify("Gagal menghubungi pelayan.");
+      return;
+    }
+  }
+  notify(baru === "bertugas" ? "Status anda kini: Bertugas." : "Status anda kini: Cuti.");
+}
+
+function siapTugas(id){
+  const t = bookings.find(b => b.id === id);
+  confirmModal("Selesai Tugasan " + id,
+    `Sahkan tugasan ke <b>${esc(t.destinasi)}</b> telah selesai?<br><br>
+     Masa sebenar akan direkodkan oleh pelayan.<br>
+     Kenderaan dan jadual anda akan dibebaskan untuk tempahan baharu selepas ini.`,
+    async () => {
+      closeModal();
+      /* Mod demo / tiada API: kemas kini setempat sahaja */
+      if(!apiAktif() || !TOKEN){
+        t.status = "selesai"; t.masaSelesai = skrgStr();
+        const [tkhS, msS] = t.masaSelesai.split(" ");
+        if(!t.masaTamat) t.masaTamat = msS;
+        if(tkhS !== t.tarikh) t.tarikhTamat = tkhS;
+        render(); notify(`Tugasan ${id} selesai.`); return;
+      }
+      /* Server sahkan pemandu yang ditugaskan & rekod masa server */
+      setSync("saving");
+      try{
+        const res = await api("bookingComplete", { id });
+        if(res.sesiTamat){ sesiTamat(); return; }
+        if(!res.ok){ setSync("err"); notify(res.ralat || "Gagal menyelesaikan tugasan."); return; }
+        Object.assign(t, res.booking);
+        setSync("ok"); render(); notify(`Tugasan ${id} selesai. Terima kasih!`);
+      }catch(e){
+        setSync("err"); notify("Gagal menghubungi pelayan.");
+      }
+    }, "✔ Ya, Sudah Selesai", "btn-green");
+}
+
+/* ---------- PAPAN PEMUKA ---------- */
+function renderDashboard(){
+  const s = {
+    tersedia: vehicles.filter(v=>v.status==="tersedia").length,
+    jalan: vehicles.filter(v=>v.status==="dalam_perjalanan").length,
+    sel: vehicles.filter(v=>v.status==="selenggara").length,
+    tunggu: bookings.filter(b=>b.status==="menunggu").length,
+  };
+  const trips = bookings.filter(b => dudukiHari(b, HARI_INI) && (b.status==="diluluskan" || b.status==="selesai"));
+
+  const fleetRows = vehicles.map(v => {
+    const trip = trips.find(t => t.vehicleId === v.id && t.status === "diluluskan");
+    const d = trip ? drv(trip.driverId) : null;
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:12px">
+        <span class="plat">${esc(v.plat)}</span>
+        <div><div style="font-weight:600">${esc(v.model)}</div><div class="muted">${esc(v.jenis)}</div></div>
+      </div></td>
+      <td>${chip(VSTATUS[v.status])}</td>
+      <td style="color:var(--slate)">📍 ${esc(v.lokasi)}</td>
+      <td style="color:var(--slate)">${trip ? `${esc(d.nama)} · <span class="muted">${esc(trip.destinasi)}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
+    </tr>`;
+  }).join("");
+
+  const tripRows = trips.length === 0
+    ? `<div style="padding:32px;text-align:center;color:var(--slate-l);font-size:14px">Tiada pergerakan dijadualkan hari ini.</div>`
+    : trips.map(t => {
+        const v = veh(t.vehicleId), d = drv(t.driverId);
+        return `<div style="padding:14px 20px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+          <span style="font-family:Consolas,monospace;font-weight:700;width:96px">${paparMasa(t)}</span>
+          <div style="flex:1;min-width:200px">
+            <div style="font-weight:600">${esc(t.tujuan)}</div>
+            <div class="muted">${esc(t.destinasi)} · ${esc(t.pemohon)}, ${esc(t.bahagian)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            ${v ? `<span class="plat">${esc(v.plat)}</span>` : ""}
+            <span style="font-size:13px;color:var(--slate)">${d ? esc(d.nama) : ""}</span>
+            ${chip(BSTATUS[t.status])}
+            ${t.status === "diluluskan" ? `<button class="btn-sm" onclick="complete('${t.id}')">Tanda Selesai</button>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+
+  return `
+    <div class="stats">
+      <div class="stat"><span class="ic">✅</span><div><div class="v c-green">${s.tersedia}</div><div class="l">Kenderaan Tersedia</div></div></div>
+      <div class="stat"><span class="ic">🛣️</span><div><div class="v c-amber">${s.jalan}</div><div class="l">Dalam Perjalanan</div></div></div>
+      <div class="stat"><span class="ic">🔧</span><div><div class="v c-red">${s.sel}</div><div class="l">Dalam Selenggaraan</div></div></div>
+      <div class="stat"><span class="ic">⏳</span><div><div class="v c-sky">${s.tunggu}</div><div class="l">Tempahan Menunggu</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>📍 Papan Keberadaan Kenderaan</h3><span class="muted">Kemas kini: ${klNow().masa}</span></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Kenderaan</th><th>Status</th><th>Lokasi Semasa</th><th>Pemandu / Tugasan</th></tr></thead>
+        <tbody>${fleetRows}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>🛣️ Pergerakan Hari Ini — ${fmtTarikh(HARI_INI)}</h3></div>
+      ${tripRows}
+    </div>`;
+}
+
+/* ---------- TEMPAHAN ---------- */
+function renderTempahan(){
+  const senarai = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  const cards = senarai.length === 0
+    ? `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.</div>`
+    : senarai.map(b => {
+    const v = veh(b.vehicleId), d = drv(b.driverId);
+    return `<div class="bk">
+      <div style="flex:1;min-width:260px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span class="id">${b.id}</span>${chip(BSTATUS[b.status])}
+        </div>
+        <h4>${esc(b.tujuan)}</h4>
+        <div class="meta">📍 ${esc(b.destinasi)} &nbsp;·&nbsp; ${paparTarikh(b)}, ${paparMasa(b)} &nbsp;·&nbsp; ${b.penumpang} penumpang</div>
+        <div class="who">Pemohon: ${esc(b.pemohon)} — ${esc(b.bahagian)}</div>
+        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)} &nbsp;|&nbsp; ${esc(d.nama)}</div>` : ""}
+        ${b.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(b.masaSelesai)}</div>` : ""}
+      </div>
+      ${isAdmin() && b.status === "menunggu" ? `<div><button class="btn btn-dark" onclick="openApprove('${b.id}')">Proses ›</button></div>` : ""}
+    </div>`;
+  }).join("");
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 class="sect">${isAdmin() ? "Senarai Tempahan" : "Tempahan Saya"}</h2>
+      <button class="btn btn-amber" onclick="openForm()">＋ Tempahan Baharu</button>
+    </div>
+    <div style="display:grid;gap:14px">${cards}</div>`;
+}
+
+/* ---------- KENDERAAN ---------- */
+function renderKenderaan(){
+  const cards = vehicles.map(v => {
+    const taxWarn = v.roadtax < "2026-09-01";
+    return `<div class="veh">
+      <div class="veh-top">
+        <div>
+          <span class="plat">${esc(v.plat)}</span>
+          <h4>${esc(v.model)}</h4>
+          <div class="typ">${esc(v.jenis)} · ${v.kapasiti} tempat duduk</div>
+        </div>
+        ${chip(VSTATUS[v.status])}
+      </div>
+      <div class="veh-stats">
+        <div class="vs"><div class="n">${v.odometer.toLocaleString()} km</div><div class="t">Odometer</div></div>
+        <div class="vs"><div class="n">${v.bahanApi}%</div><div class="t">Bahan Api</div></div>
+        <div class="vs ${taxWarn?'warn':''}"><div class="n">${fmtTarikh(v.roadtax)}</div><div class="t">Cukai Jalan</div></div>
+      </div>
+      ${taxWarn ? `<div class="alert">⚠️ Cukai jalan hampir tamat — sila perbaharui.</div>` : ""}
+      <label class="fld"><span>Lokasi Semasa</span>
+        <input value="${esc(v.lokasi)}" onchange="updVehicle('${v.id}','lokasi',this.value)">
+      </label>
+      <label class="fld"><span>Status</span>
+        <select onchange="updVehicle('${v.id}','status',this.value)">
+          <option value="tersedia" ${v.status==="tersedia"?"selected":""}>Tersedia</option>
+          <option value="dalam_perjalanan" ${v.status==="dalam_perjalanan"?"selected":""}>Dalam Perjalanan</option>
+          <option value="selenggara" ${v.status==="selenggara"?"selected":""}>Selenggaraan</option>
+        </select>
+      </label>
+      <div class="act-row">
+        <button class="btn-edit" onclick="openVehForm('${v.id}')">✎ Edit</button>
+        <button class="btn-edit" style="border-color:var(--line);color:var(--slate)" onclick="selFilter='${v.id}';setTab('selenggara')">🔧 Sejarah</button>
+        <button class="btn-del" onclick="askDelVehicle('${v.id}')">🗑 Padam</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 class="sect">Pengurusan Kenderaan</h2>
+      <button class="btn btn-amber" onclick="openVehForm()">＋ Tambah Kenderaan</button>
+    </div>
+    <div class="fleet">${cards}</div>`;
+}
+
+/* ---------- JADUAL PEMANDU ---------- */
+function renderPemandu(){
+  const head = MINGGU.map((t,i) =>
+    `<th style="${t===HARI_INI?'color:var(--amber-d)':''}">${HARI[i]}<br><span style="font-weight:400;text-transform:none">${fmtTarikh(t)}</span></th>`
+  ).join("");
+
+  const rows = drivers.map(d => {
+    const cells = MINGGU.map(tarikh => {
+      const cls = tarikh === HARI_INI ? "today" : "";
+      if(d.status === "cuti") return `<td class="${cls}"><span class="off">Cuti</span></td>`;
+      const tugas = bookings.filter(b => b.driverId === d.id && dudukiHari(b, tarikh) && (b.status==="diluluskan"||b.status==="selesai"));
+      if(tugas.length === 0) return `<td class="${cls}"><span class="free">Kosong</span></td>`;
+      return `<td class="${cls}">${tugas.map(t => {
+        const v = veh(t.vehicleId);
+        return `<div class="duty"><div class="tm">${paparMasa(t)}</div><div>${esc(t.destinasi)}</div><div class="pl">${v?esc(v.plat):""}</div></div>`;
+      }).join("")}</td>`;
+    }).join("");
+
+    return `<tr>
+      <td style="min-width:220px">
+        <div class="drv-nm">${esc(d.nama)}</div>
+        <div class="drv-info">📞 ${esc(d.telefon)} · Lesen ${esc(d.lesen)}</div>
+        <button class="toggle ${d.status==='bertugas'?'on':'off2'}" onclick="toggleDriver('${d.id}')">
+          ${d.status==='bertugas' ? '● Bertugas' : '○ Cuti'}
+        </button>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn-edit" onclick="openDrvForm('${d.id}')">✎ Edit</button>
+          <button class="btn-del" onclick="askDelDriver('${d.id}')">🗑 Padam</button>
+        </div>
+      </td>${cells}
+    </tr>`;
+  }).join("");
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 class="sect">Jadual Pemandu — Minggu ${fmtTarikh(MINGGU[0])} hingga ${fmtTarikh(MINGGU[6])}</h2>
+      <button class="btn btn-amber" onclick="openDrvForm()">＋ Tambah Pemandu</button>
+    </div>
+    <div class="card tbl-scroll">
+      <table class="sched">
+        <thead><tr><th>Pemandu</th>${head}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ================= TINDAKAN ================= */
+function updVehicle(id, key, val){
+  const v = veh(id); v[key] = val; sync();
+}
+function toggleDriver(id){
+  const d = drv(id); d.status = d.status === "bertugas" ? "cuti" : "bertugas"; sync();
+}
+function complete(id){
+  const b = bookings.find(b => b.id === id);
+  b.status = "selesai";
+  b.masaSelesai = skrgStr();
+  const [tkhS, msS] = b.masaSelesai.split(" ");
+  if(!b.masaTamat) b.masaTamat = msS;
+  if(tkhS !== b.tarikh) b.tarikhTamat = tkhS;
+  sync(); notify(`Tempahan ${id} ditanda selesai pada ${fmtMasaSelesai(b.masaSelesai)}.`);
+}
+
+/* ---------- Modal: proses kelulusan ---------- */
+function openApprove(id){
+  const b = bookings.find(x => x.id === id);
+  const vehOpts = vehicles.filter(v => v.status !== "selenggara").map(v =>
+    `<option value="${v.id}" ${v.kapasiti < b.penumpang ? "disabled" : ""}>${esc(v.plat)} · ${esc(v.model)} (${v.kapasiti} tempat)${v.kapasiti < b.penumpang ? " — kapasiti tidak mencukupi" : ""}</option>`
+  ).join("");
+  const drvOpts = drivers.map(d =>
+    `<option value="${d.id}" ${d.status==="cuti" ? "disabled" : ""}>${esc(d.nama)}${d.status==="cuti" ? " — bercuti" : ""}</option>`
+  ).join("");
+
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-h"><h3>Proses Tempahan ${b.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="summary">
+          <b>${esc(b.tujuan)}</b><br>
+          ${esc(b.destinasi)} · ${paparTarikh(b)}, ${paparMasa(b)} · ${b.penumpang} penumpang<br>
+          <span class="muted">${esc(b.pemohon)} — ${esc(b.bahagian)}</span>
+        </div>
+        <label class="fld"><span>Tugaskan Kenderaan</span>
+          <select id="ap-veh" onchange="checkClash('${b.id}')"><option value="">— Pilih kenderaan —</option>${vehOpts}</select>
+        </label>
+        <label class="fld"><span>Tugaskan Pemandu</span>
+          <select id="ap-drv" onchange="checkClash('${b.id}')"><option value="">— Pilih pemandu —</option>${drvOpts}</select>
+        </label>
+        <div id="ap-clash"></div>
+        <div class="btn-row">
+          <button class="btn btn-green" id="ap-ok" disabled onclick="doApprove('${b.id}')">✔ Luluskan</button>
+          <button class="btn btn-red" onclick="doReject('${b.id}')">✕ Tolak</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function checkClash(id){
+  const b = bookings.find(x => x.id === id);
+  const vId = $("ap-veh").value, dId = $("ap-drv").value;
+  const box = $("ap-clash"), ok = $("ap-ok");
+  if(!vId || !dId){ box.innerHTML = ""; ok.disabled = true; return; }
+  const cl = conflicts(b, vId, dId);
+  if(cl.length){
+    box.innerHTML = `<div class="clash"><b>⚠️ Konflik jadual dikesan:</b>${cl.map(c =>
+      `<p>• ${c.id} — ${esc(c.destinasi)}, ${paparMasa(c)}</p>`).join("")}</div>`;
+    ok.disabled = true;
+  } else {
+    box.innerHTML = "";
+    ok.disabled = false;
+  }
+}
+
+function doApprove(id){
+  const b = bookings.find(x => x.id === id);
+  b.status = "diluluskan";
+  b.vehicleId = $("ap-veh").value;
+  b.driverId = $("ap-drv").value;
+  closeModal(); sync(); notify(`Tempahan ${id} diluluskan.`);
+}
+function doReject(id){
+  bookings.find(x => x.id === id).status = "ditolak";
+  closeModal(); sync(); notify(`Tempahan ${id} ditolak.`);
+}
+
+/* ---------- Modal: tempahan baharu ---------- */
+function openForm(){
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-h"><h3>Tempahan Baharu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="row2">
+          <label class="fld"><span>Nama Pemohon</span><input id="f-pemohon" value="${currentUser ? esc(currentUser.nama) : ""}" placeholder="cth: Pn. Aishah Kamal" oninput="checkForm()"></label>
+          <label class="fld"><span>Bahagian / Unit</span><input id="f-bahagian" placeholder="cth: Bahagian Kewangan" oninput="checkForm()"></label>
+        </div>
+        <label class="fld"><span>Tujuan Perjalanan</span><input id="f-tujuan" placeholder="cth: Mesyuarat penyelarasan" oninput="checkForm()"></label>
+        <label class="fld"><span>Destinasi</span><input id="f-destinasi" placeholder="cth: Putrajaya, Presint 4" oninput="checkForm()"></label>
+        <div class="row2">
+          <label class="fld"><span>Tarikh Mula</span><input type="date" id="f-tarikh" value="${HARI_INI}" oninput="checkForm()"></label>
+          <label class="fld"><span>Tarikh Tamat <span style="text-transform:none;font-weight:400">(pilihan — untuk tempahan lebih sehari)</span></span><input type="date" id="f-tkh2" oninput="checkForm()"></label>
+        </div>
+        <div class="row4">
+          <label class="fld"><span>Masa Mula</span><input type="time" id="f-mula" value="09:00" oninput="checkForm()"></label>
+          <label class="fld"><span>Masa Tamat <span style="text-transform:none;font-weight:400">(pilihan)</span></span><input type="time" id="f-tamat" oninput="checkForm()"></label>
+          <label class="fld"><span>Penumpang</span><input type="number" id="f-pax" value="1" min="1" max="11" oninput="checkForm()"></label>
+        </div>
+        <div id="f-err"></div>
+        <button class="btn btn-amber" id="f-ok" style="justify-content:center" onclick="submitForm()">Hantar Tempahan</button>
+      </div>
+    </div>
+  </div>`;
+  checkForm();
+}
+
+function checkForm(){
+  const mula = $("f-mula").value, tamat = $("f-tamat").value;
+  const tkh = $("f-tarikh").value, tkh2 = $("f-tkh2").value;
+  const sehari = !tkh2 || tkh2 === tkh;                 // tempahan hari yang sama
+  const tarikhOK = !tkh2 || tkh2 >= tkh;                // tarikh tamat tidak boleh sebelum tarikh mula
+  const masaOK = !sehari || !tamat || mula < tamat;     // peraturan masa hanya untuk hari sama
+  const valid = $("f-pemohon").value.trim() && $("f-bahagian").value.trim() &&
+                $("f-tujuan").value.trim() && $("f-destinasi").value.trim() &&
+                tkh && mula && tarikhOK && masaOK;
+  let mesej = `<span class="muted">Masa tamat boleh dibiarkan kosong — ia direkodkan automatik apabila pemandu menanda Selesai. Untuk tempahan bermalam / lebih sehari, isi Tarikh Tamat.</span>`;
+  if(!tarikhOK) mesej = `<span class="err">Tarikh tamat mesti pada atau selepas tarikh mula.</span>`;
+  else if(sehari && tamat && mula >= tamat) mesej = `<span class="err">Masa tamat mesti selepas masa mula.</span>`;
+  $("f-err").innerHTML = mesej;
+  $("f-ok").disabled = !valid;
+}
+
+async function submitForm(){
+  const booking = {
+    pemohon: $("f-pemohon").value.trim(),
+    bahagian: $("f-bahagian").value.trim(),
+    tujuan: $("f-tujuan").value.trim(),
+    destinasi: $("f-destinasi").value.trim(),
+    tarikh: $("f-tarikh").value,
+    tarikhTamat: $("f-tkh2").value || "",
+    masaMula: $("f-mula").value,
+    masaTamat: $("f-tamat").value,
+    penumpang: parseInt($("f-pax").value) || 1,
+  };
+
+  /* Mod demo / tiada API: simpan setempat sahaja (tidak kekal) */
+  if(!apiAktif() || !TOKEN){
+    const id = `T-${nextNum++}`;
+    bookings.unshift({ id, status:"menunggu", vehicleId:null, driverId:null,
+      userId: currentUser ? currentUser.userId : null, masaSelesai:"", ...booking });
+    closeModal(); render(); notify(`Tempahan ${id} dihantar (mod tempatan).`);
+    return;
+  }
+
+  /* Server jana ID & tetapkan status — pemohon tidak boleh lulus sendiri */
+  const btn = $("f-ok"); btn.disabled = true; btn.textContent = "Menghantar…";
+  try{
+    const res = await api("bookingAdd", { booking });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("f-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal menghantar tempahan.")}</span>`;
+      btn.disabled = false; btn.textContent = "Hantar Tempahan"; return;
+    }
+    bookings.unshift(res.booking);
+    closeModal(); render(); notify(`Tempahan ${res.booking.id} dihantar untuk kelulusan.`);
+  }catch(e){
+    $("f-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "Hantar Tempahan";
+  }
+}
+
+/* ============================================================
+   MODUL SELENGGARAAN
+   ============================================================ */
+function renderSelenggara(){
+  const list = maintenance
+    .filter(s => selFilter === "semua" || s.vehicleId === selFilter)
+    .sort((a,b) => b.tarikh.localeCompare(a.tarikh));
+
+  const opts = vehicles.map(v =>
+    `<option value="${v.id}" ${selFilter===v.id?"selected":""}>${esc(v.plat)} — ${esc(v.model)}</option>`).join("");
+
+  const jumlahKos = list.filter(s => s.status !== "dijadual").reduce((t,s) => t + s.kos, 0);
+
+  const rows = list.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--slate-l)">Tiada rekod selenggaraan.</td></tr>`
+    : list.map(s => {
+        const v = veh(s.vehicleId);
+        return `<tr>
+          <td style="white-space:nowrap">${fmtTarikh(s.tarikh)}</td>
+          <td>${v ? `<span class="plat">${esc(v.plat)}</span><div class="muted" style="margin-top:4px">${esc(v.model)}</div>` : '<span class="muted">Kenderaan dipadam</span>'}</td>
+          <td><b>${esc(s.jenis)}</b><div class="muted" style="margin-top:2px">${esc(s.butiran)}</div></td>
+          <td style="color:var(--slate)">${esc(s.bengkel)}</td>
+          <td class="kos">${s.kos > 0 ? rm(s.kos) : '<span class="muted">—</span>'}</td>
+          <td>${chip(SSTATUS[s.status])}</td>
+          <td style="white-space:nowrap">
+            <button class="btn-edit" onclick="openSelForm('${s.id}')">✎</button>
+            <button class="btn-del" onclick="askDelSel('${s.id}')">🗑</button>
+          </td>
+        </tr>`;
+      }).join("");
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 class="sect">Rekod Sejarah Selenggaraan</h2>
+      <button class="btn btn-amber" onclick="openSelForm()">＋ Tambah Rekod</button>
+    </div>
+    <div class="card">
+      <div class="card-h">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:600;color:var(--slate)">Tapis kenderaan:</span>
+          <select style="width:auto;min-width:220px" onchange="selFilter=this.value;render()">
+            <option value="semua" ${selFilter==="semua"?"selected":""}>Semua kenderaan</option>
+            ${opts}
+          </select>
+        </div>
+        <span class="muted">Jumlah kos rekod dipapar: <b style="color:var(--ink)">${rm(jumlahKos)}</b></span>
+      </div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Tarikh</th><th>Kenderaan</th><th>Jenis & Butiran Kerja</th><th>Bengkel / Pembekal</th><th style="text-align:right">Kos</th><th>Status</th><th>Tindakan</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
+}
+
+function openSelForm(id){
+  const s = id ? maintenance.find(x => x.id === id) : null;
+  const vOpts = vehicles.map(v =>
+    `<option value="${v.id}" ${s&&s.vehicleId===v.id?"selected":""}>${esc(v.plat)} — ${esc(v.model)}</option>`).join("");
+  const jOpts = JENIS_SEL.map(j => `<option ${s&&s.jenis===j?"selected":""}>${j}</option>`).join("");
+
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-h"><h3>${s ? "Edit Rekod Selenggaraan" : "Tambah Rekod Selenggaraan"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <label class="fld"><span>Kenderaan</span><select id="s-veh">${vOpts}</select></label>
+        <div class="row2">
+          <label class="fld"><span>Tarikh</span><input type="date" id="s-tarikh" value="${s?s.tarikh:HARI_INI}" oninput="checkSelForm()"></label>
+          <label class="fld"><span>Jenis Kerja</span><select id="s-jenis">${jOpts}</select></label>
+        </div>
+        <label class="fld"><span>Butiran Kerja</span><input id="s-butiran" value="${s?esc(s.butiran):""}" placeholder="cth: Servis 50,000 km — tukar minyak enjin & penapis" oninput="checkSelForm()"></label>
+        <label class="fld"><span>Bengkel / Pembekal</span><input id="s-bengkel" value="${s?esc(s.bengkel):""}" placeholder="cth: Pusat Servis Toyota, Cheras" oninput="checkSelForm()"></label>
+        <div class="row2">
+          <label class="fld"><span>Kos (RM)</span><input type="number" id="s-kos" value="${s?s.kos:0}" min="0" step="0.01"></label>
+          <label class="fld"><span>Odometer (km)</span><input type="number" id="s-odo" value="${s?s.odometer:""}" min="0"></label>
+        </div>
+        <label class="fld"><span>Status</span>
+          <select id="s-status">
+            <option value="dijadual" ${s&&s.status==="dijadual"?"selected":""}>Dijadualkan</option>
+            <option value="dalam_proses" ${s&&s.status==="dalam_proses"?"selected":""}>Dalam Proses</option>
+            <option value="selesai" ${!s||s.status==="selesai"?"selected":""}>Selesai</option>
+          </select>
+        </label>
+        <button class="btn btn-amber" id="s-ok" style="justify-content:center" onclick="submitSel(${s?`'${s.id}'`:"null"})">
+          ${s ? "Simpan Perubahan" : "Tambah Rekod"}
+        </button>
+      </div>
+    </div>
+  </div>`;
+  checkSelForm();
+}
+
+function checkSelForm(){
+  $("s-ok").disabled = !($("s-tarikh").value && $("s-butiran").value.trim() && $("s-bengkel").value.trim());
+}
+
+function submitSel(id){
+  const data = {
+    vehicleId: $("s-veh").value,
+    tarikh: $("s-tarikh").value,
+    jenis: $("s-jenis").value,
+    butiran: $("s-butiran").value.trim(),
+    bengkel: $("s-bengkel").value.trim(),
+    kos: parseFloat($("s-kos").value) || 0,
+    odometer: parseInt($("s-odo").value) || 0,
+    status: $("s-status").value,
+  };
+  if(id){
+    Object.assign(maintenance.find(x => x.id === id), data);
+    notify("Rekod selenggaraan dikemas kini.");
+  } else {
+    maintenance.push({ id:`S${nextSel++}`, ...data });
+    notify("Rekod selenggaraan ditambah.");
+  }
+  closeModal(); sync();
+}
+
+function askDelSel(id){
+  const s = maintenance.find(x => x.id === id);
+  const v = veh(s.vehicleId);
+  confirmModal("Padam Rekod Selenggaraan",
+    `Anda pasti mahu memadam rekod <b>${esc(s.jenis)}</b> (${fmtTarikh(s.tarikh)})${v ? ` bagi <b>${esc(v.plat)}</b>` : ""}? Tindakan ini tidak boleh dibatalkan.`,
+    () => {
+      maintenance = maintenance.filter(x => x.id !== id);
+      closeModal(); sync(); notify("Rekod selenggaraan dipadam.");
+    });
+}
+
+/* ============================================================
+   MODUL LAPORAN BULANAN
+   ============================================================ */
+function renderLaporan(){
+  const bln = bookings.filter(b => b.tarikh.startsWith(rptBulan));
+  const aktif = bln.filter(b => b.status === "diluluskan" || b.status === "selesai");
+  const sel = maintenance.filter(s => s.tarikh.startsWith(rptBulan) && s.status !== "dijadual");
+  const kosSel = sel.reduce((t,s) => t + s.kos, 0);
+  const jmlJam = aktif.reduce((t,b) => t + jamTempahan(b), 0);
+
+  /* Penggunaan kenderaan */
+  const vUse = vehicles.map(v => {
+    const trips = aktif.filter(b => b.vehicleId === v.id);
+    return { v, trips: trips.length, jam: trips.reduce((t,b) => t + jamTempahan(b), 0) };
+  }).sort((a,b) => b.trips - a.trips);
+
+  /* Tugasan pemandu */
+  const dUse = drivers.map(d => {
+    const trips = aktif.filter(b => b.driverId === d.id);
+    return { d, trips: trips.length, jam: trips.reduce((t,b) => t + jamTempahan(b), 0) };
+  }).sort((a,b) => b.trips - a.trips);
+
+  /* Tempahan mengikut bahagian */
+  const bhg = {};
+  bln.forEach(b => { bhg[b.bahagian] = (bhg[b.bahagian] || 0) + 1; });
+  const bhgRows = Object.entries(bhg).sort((a,b) => b[1] - a[1]).map(([nama,n]) =>
+    `<tr><td>${esc(nama)}</td><td style="text-align:right;font-weight:700">${n}</td></tr>`).join("")
+    || `<tr><td colspan="2" style="text-align:center;color:var(--slate-l);padding:20px">Tiada data.</td></tr>`;
+
+  const selRows = sel.length === 0
+    ? `<tr><td colspan="4" style="text-align:center;color:var(--slate-l);padding:20px">Tiada kerja selenggaraan bulan ini.</td></tr>`
+    : sel.map(s => {
+        const v = veh(s.vehicleId);
+        return `<tr><td style="white-space:nowrap">${fmtTarikh(s.tarikh)}</td><td>${v?esc(v.plat):"—"}</td><td>${esc(s.jenis)} — <span class="muted">${esc(s.butiran)}</span></td><td class="kos">${rm(s.kos)}</td></tr>`;
+      }).join("");
+
+  return `
+    <div class="print-title">
+      <h2>Laporan Bulanan Penggunaan Kenderaan</h2>
+      <p>PERBADANAN PERPUSTAKAAN AWAM TERENGGANU · Bahagian Khidmat Pengurusan · ${fmtBulan(rptBulan)}</p>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px" class="no-print">
+      <h2 class="sect">Laporan Bulanan — ${fmtBulan(rptBulan)}</h2>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="month" style="width:auto" value="${rptBulan}" onchange="rptBulan=this.value;render()">
+        <button class="btn btn-dark" onclick="window.print()">🖨 Cetak Laporan</button>
+      </div>
+    </div>
+    <div class="rpt-grid">
+      <div class="rpt-stat"><div class="v">${bln.length}</div><div class="l">Jumlah Tempahan</div></div>
+      <div class="rpt-stat"><div class="v c-green">${bln.filter(b=>b.status==="selesai").length}</div><div class="l">Selesai</div></div>
+      <div class="rpt-stat"><div class="v c-amber">${bln.filter(b=>b.status==="diluluskan").length}</div><div class="l">Diluluskan (Aktif)</div></div>
+      <div class="rpt-stat"><div class="v c-red">${bln.filter(b=>b.status==="ditolak").length}</div><div class="l">Ditolak</div></div>
+      <div class="rpt-stat"><div class="v c-sky">${jmlJam.toFixed(1)}</div><div class="l">Jam Penggunaan</div></div>
+      <div class="rpt-stat"><div class="v">${rm(kosSel)}</div><div class="l">Kos Selenggaraan</div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>🚗 Penggunaan Kenderaan</h3></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Kenderaan</th><th style="text-align:right">Bil. Pergerakan</th><th style="text-align:right">Jumlah Jam</th></tr></thead>
+        <tbody>${vUse.map(u => `<tr>
+          <td><span class="plat">${esc(u.v.plat)}</span> &nbsp;${esc(u.v.model)}</td>
+          <td style="text-align:right;font-weight:700">${u.trips}</td>
+          <td style="text-align:right">${u.jam.toFixed(1)} jam</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>👥 Tugasan Pemandu</h3></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Pemandu</th><th style="text-align:right">Bil. Tugasan</th><th style="text-align:right">Jumlah Jam</th></tr></thead>
+        <tbody>${dUse.map(u => `<tr>
+          <td>${esc(u.d.nama)}</td>
+          <td style="text-align:right;font-weight:700">${u.trips}</td>
+          <td style="text-align:right">${u.jam.toFixed(1)} jam</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>🏢 Tempahan Mengikut Bahagian</h3></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Bahagian / Unit</th><th style="text-align:right">Bil. Tempahan</th></tr></thead>
+        <tbody>${bhgRows}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>🔧 Kos Selenggaraan Bulan Ini</h3></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Tarikh</th><th>Kenderaan</th><th>Kerja</th><th style="text-align:right">Kos</th></tr></thead>
+        <tbody>${selRows}</tbody>
+        ${sel.length ? `<tfoot><tr><td colspan="3">JUMLAH</td><td class="kos">${rm(kosSel)}</td></tr></tfoot>` : ""}
+      </table></div>
+    </div>`;
+}
+
+/* ============================================================
+   MODUL PENGURUSAN PENGGUNA (admin sahaja)
+   ============================================================ */
+function renderPengguna(){
+  if(!apiAktif() || !TOKEN){
+    return `<h2 class="sect">Pengurusan Pengguna</h2>
+      <div class="card"><div style="padding:30px;color:var(--slate);font-size:14px;line-height:1.7">
+        Modul ini memerlukan sambungan Google Sheets dan log masuk sebenar.<br>
+        Tetapkan <b>API_URL</b> di bahagian atas fail ini, deploy Code.gs, kemudian log masuk dengan akaun admin untuk menambah dan mengurus pengguna.
+      </div></div>`;
+  }
+  const rows = users.map(u => `<tr>
+    <td style="font-family:Consolas,monospace;font-weight:700">${esc(u.userId)}</td>
+    <td>${esc(u.nama)}${u.userId === currentUser.userId ? ' <span class="muted">(anda)</span>' : ""}</td>
+    <td>${chip(u.peranan === "admin" ? {label:"Admin", cls:"amber"} : u.peranan === "pemandu" ? {label:"Pemandu", cls:"green"} : {label:"Pemohon", cls:"gray"})}${u.peranan === "pemandu" && u.driverId && drv(u.driverId) ? `<div class="muted" style="margin-top:4px">↳ ${esc(drv(u.driverId).nama)}</div>` : ""}</td>
+    <td style="white-space:nowrap">
+      <button class="btn-edit" onclick="openResetPw('${u.userId}')">🔑 Tukar Kata Laluan</button>
+      ${u.userId !== currentUser.userId ? `<button class="btn-del" onclick="askDelUser('${u.userId}')">🗑 Padam</button>` : ""}
+    </td>
+  </tr>`).join("");
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 class="sect">Pengurusan Pengguna</h2>
+      <button class="btn btn-amber" onclick="openUserForm()">＋ Tambah Pengguna</button>
+    </div>
+    <div class="card"><div class="tbl-scroll"><table>
+      <thead><tr><th>ID Pengguna</th><th>Nama</th><th>Peranan</th><th>Tindakan</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--slate-l)">Tiada pengguna.</td></tr>'}</tbody>
+    </table></div></div>
+    <div class="card"><div style="padding:16px 20px;font-size:13px;color:var(--slate);line-height:1.7">
+      <b>Peranan:</b> <b>Admin</b> boleh akses semua modul termasuk kelulusan, kenderaan, laporan dan pengguna.
+      <b>Pemandu</b> hanya nampak tugasan mereka sendiri dan boleh menanda selesai (masa sebenar direkodkan). <b>Pemohon</b> hanya boleh menghantar tempahan dan melihat status tempahan mereka sendiri.
+      Kata laluan disimpan sebagai cincangan (hash) — tiada sesiapa boleh melihat kata laluan sebenar, termasuk admin.
+    </div></div>`;
+}
+
+function openUserForm(){
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-h"><h3>Tambah Pengguna Baharu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="row2">
+          <label class="fld"><span>ID Pengguna</span><input id="u-id" placeholder="cth: staf01" oninput="checkUserForm()"></label>
+          <label class="fld"><span>Peranan</span>
+            <select id="u-role" onchange="$('u-drv-wrap').style.display = this.value==='pemandu' ? 'block' : 'none'">
+              <option value="pemohon">Pemohon</option>
+              <option value="pemandu">Pemandu</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+        </div>
+        <label class="fld"><span>Nama Penuh</span><input id="u-nm" placeholder="cth: En. Hafiz Rahman" oninput="checkUserForm()"></label>
+        <label class="fld" id="u-drv-wrap" style="display:none"><span>Pautkan kepada Rekod Pemandu</span>
+          <select id="u-drv">${drivers.map(d => `<option value="${d.id}">${esc(d.nama)}</option>`).join("")}</select>
+        </label>
+        <div class="row2">
+          <label class="fld"><span>Kata Laluan</span><input id="u-pw" type="password" oninput="checkUserForm()"></label>
+          <label class="fld"><span>Ulang Kata Laluan</span><input id="u-pw2" type="password" oninput="checkUserForm()"></label>
+        </div>
+        <div id="u-err"></div>
+        <button class="btn btn-amber" id="u-ok" style="justify-content:center" onclick="submitUser()">Tambah Pengguna</button>
+      </div>
+    </div>
+  </div>`;
+  checkUserForm();
+}
+
+function checkUserForm(){
+  const pw = $("u-pw").value, pw2 = $("u-pw2").value;
+  let err = "";
+  if(pw && pw.length < 6) err = "Kata laluan mestilah sekurang-kurangnya 6 aksara.";
+  else if(pw && pw2 && pw !== pw2) err = "Kata laluan tidak sepadan.";
+  $("u-err").innerHTML = err ? `<span class="err">${err}</span>` : "";
+  $("u-ok").disabled = !($("u-id").value.trim() && $("u-nm").value.trim() && pw.length >= 6 && pw === pw2);
+}
+
+async function submitUser(){
+  const btn = $("u-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  try{
+    const res = await api("userAdd", {
+      userId: $("u-id").value.trim(),
+      nama: $("u-nm").value.trim(),
+      peranan: $("u-role").value,
+      driverId: $("u-role").value === "pemandu" ? $("u-drv").value : null,
+      password: $("u-pw").value,
+    });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("u-err").innerHTML = `<span class="err">${esc(res.ralat)}</span>`;
+      btn.disabled = false; btn.textContent = "Tambah Pengguna"; return;
+    }
+    users = res.users;
+    closeModal(); render(); notify("Pengguna ditambah.");
+  }catch(e){
+    $("u-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "Tambah Pengguna";
+  }
+}
+
+function openResetPw(userId){
+  const u = users.find(x => x.userId === userId);
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-h"><h3>Tukar Kata Laluan — ${esc(u.nama)}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <label class="fld"><span>Kata Laluan Baharu</span><input id="r-pw" type="password" oninput="checkResetPw()"></label>
+        <label class="fld"><span>Ulang Kata Laluan</span><input id="r-pw2" type="password" oninput="checkResetPw()"></label>
+        <div id="r-err"></div>
+        <button class="btn btn-amber" id="r-ok" style="justify-content:center" onclick="submitResetPw('${esc(userId)}')">Simpan Kata Laluan</button>
+      </div>
+    </div>
+  </div>`;
+  checkResetPw();
+}
+
+function checkResetPw(){
+  const pw = $("r-pw").value, pw2 = $("r-pw2").value;
+  let err = "";
+  if(pw && pw.length < 6) err = "Kata laluan mestilah sekurang-kurangnya 6 aksara.";
+  else if(pw && pw2 && pw !== pw2) err = "Kata laluan tidak sepadan.";
+  $("r-err").innerHTML = err ? `<span class="err">${err}</span>` : "";
+  $("r-ok").disabled = !(pw.length >= 6 && pw === pw2);
+}
+
+async function submitResetPw(userId){
+  const btn = $("r-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  try{
+    const res = await api("userReset", { userId, password: $("r-pw").value });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("r-err").innerHTML = `<span class="err">${esc(res.ralat)}</span>`;
+      btn.disabled = false; btn.textContent = "Simpan Kata Laluan"; return;
+    }
+    users = res.users;
+    closeModal(); render(); notify("Kata laluan dikemas kini.");
+  }catch(e){
+    $("r-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "Simpan Kata Laluan";
+  }
+}
+
+function askDelUser(userId){
+  const u = users.find(x => x.userId === userId);
+  confirmModal("Padam Pengguna",
+    `Anda pasti mahu memadam akaun <b>${esc(u.nama)}</b> (${esc(u.userId)})? Pengguna ini tidak akan dapat log masuk lagi.`,
+    async () => {
+      try{
+        const res = await api("userDel", { userId });
+        if(res.sesiTamat){ sesiTamat(); return; }
+        if(!res.ok){ closeModal(); notify(res.ralat); return; }
+        users = res.users;
+        closeModal(); render(); notify("Pengguna dipadam.");
+      }catch(e){ closeModal(); notify("Gagal menghubungi pelayan."); }
+    });
+}
+
+/* ============================================================
+   TUKAR KATA LALUAN SENDIRI (semua peranan)
+   ============================================================ */
+function openTukarPwSendiri(){
+  if(!currentUser) return;
+  if(!apiAktif() || !TOKEN){ notify("Mod demo: tiada kata laluan untuk ditukar."); return; }
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-h"><h3>Tukar Kata Laluan Saya</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <p class="muted" style="font-size:13px">Akaun: <b>${esc(currentUser.userId)}</b> — ${esc(currentUser.nama)}</p>
+        <label class="fld"><span>Kata Laluan Semasa</span><input id="my-pw0" type="password" oninput="checkMyPw()"></label>
+        <label class="fld"><span>Kata Laluan Baharu</span><input id="my-pw1" type="password" oninput="checkMyPw()"></label>
+        <label class="fld"><span>Ulang Kata Laluan Baharu</span><input id="my-pw2" type="password" oninput="checkMyPw()"></label>
+        <div id="my-err"></div>
+        <button class="btn btn-amber" id="my-ok" style="justify-content:center" onclick="submitMyPw()">Simpan Kata Laluan</button>
+      </div>
+    </div>
+  </div>`;
+  checkMyPw();
+}
+
+function checkMyPw(){
+  const p0 = $("my-pw0").value, p1 = $("my-pw1").value, p2 = $("my-pw2").value;
+  let err = "";
+  if(p1 && p1.length < 6) err = "Kata laluan baharu mestilah sekurang-kurangnya 6 aksara.";
+  else if(p1 && p2 && p1 !== p2) err = "Kata laluan baharu tidak sepadan.";
+  else if(p0 && p1 && p0 === p1) err = "Kata laluan baharu mestilah berbeza daripada yang semasa.";
+  $("my-err").innerHTML = err ? `<span class="err">${err}</span>` : "";
+  $("my-ok").disabled = !(p0 && p1.length >= 6 && p1 === p2 && p0 !== p1);
+}
+
+async function submitMyPw(){
+  const btn = $("my-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  try{
+    const res = await api("tukarPw", {
+      passwordLama: $("my-pw0").value,
+      passwordBaru: $("my-pw1").value,
+    });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("my-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal menukar kata laluan.")}</span>`;
+      btn.disabled = false; btn.textContent = "Simpan Kata Laluan"; return;
+    }
+    closeModal(); notify("Kata laluan berjaya ditukar. Gunakan kata laluan baharu pada log masuk akan datang.");
+  }catch(e){
+    $("my-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "Simpan Kata Laluan";
+  }
+}
+
+function closeModal(){ $("modal-root").innerHTML = ""; }
+
+/* ============================================================
+   TAMBAH / EDIT / PADAM KENDERAAN
+   ============================================================ */
+function openVehForm(id){
+  const v = id ? veh(id) : null;
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-h"><h3>${v ? "Edit Kenderaan — " + esc(v.plat) : "Tambah Kenderaan Baharu"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="row2">
+          <label class="fld"><span>No. Pendaftaran (Plat)</span><input id="v-plat" value="${v?esc(v.plat):""}" placeholder="cth: WXY 1234" oninput="checkVehForm()"></label>
+          <label class="fld"><span>Model</span><input id="v-model" value="${v?esc(v.model):""}" placeholder="cth: Toyota Hiace" oninput="checkVehForm()"></label>
+        </div>
+        <div class="row2">
+          <label class="fld"><span>Jenis</span>
+            <select id="v-jenis">
+              <option ${v&&v.jenis==="Kereta Pejabat"?"selected":""}>Kereta Pejabat</option>
+              <option ${v&&v.jenis==="Kenderaan Rasmi"?"selected":""}>Kenderaan Rasmi</option>
+              <option ${v&&v.jenis==="Van Jabatan"?"selected":""}>Van Jabatan</option>
+              <option ${v&&v.jenis==="Pacuan 4 Roda"?"selected":""}>Pacuan 4 Roda</option>
+              <option ${v&&v.jenis==="Bas Jabatan"?"selected":""}>Bas Jabatan</option>
+              <option ${v&&v.jenis==="Lori / Pickup"?"selected":""}>Lori / Pickup</option>
+            </select>
+          </label>
+          <label class="fld"><span>Kapasiti (tempat duduk)</span><input type="number" id="v-kapasiti" value="${v?v.kapasiti:5}" min="1" max="44" oninput="checkVehForm()"></label>
+        </div>
+        <div class="row2">
+          <label class="fld"><span>Odometer (km)</span><input type="number" id="v-odo" value="${v?v.odometer:0}" min="0"></label>
+          <label class="fld"><span>Bahan Api (%)</span><input type="number" id="v-fuel" value="${v?v.bahanApi:100}" min="0" max="100"></label>
+        </div>
+        <div class="row2">
+          <label class="fld"><span>Tamat Cukai Jalan</span><input type="date" id="v-tax" value="${v?v.roadtax:""}" oninput="checkVehForm()"></label>
+          <label class="fld"><span>Status</span>
+            <select id="v-status">
+              <option value="tersedia" ${!v||v.status==="tersedia"?"selected":""}>Tersedia</option>
+              <option value="dalam_perjalanan" ${v&&v.status==="dalam_perjalanan"?"selected":""}>Dalam Perjalanan</option>
+              <option value="selenggara" ${v&&v.status==="selenggara"?"selected":""}>Selenggaraan</option>
+            </select>
+          </label>
+        </div>
+        <label class="fld"><span>Lokasi Semasa</span><input id="v-lokasi" value="${v?esc(v.lokasi):"Garaj Utama, Aras B1"}"></label>
+        <div id="v-err"></div>
+        <button class="btn btn-amber" id="v-ok" style="justify-content:center" onclick="submitVeh(${v?`'${v.id}'`:"null"})">
+          ${v ? "Simpan Perubahan" : "Tambah Kenderaan"}
+        </button>
+      </div>
+    </div>
+  </div>`;
+  checkVehForm();
+}
+
+function checkVehForm(){
+  const plat = $("v-plat").value.trim();
+  const dup = vehicles.some(v => v.plat.toLowerCase() === plat.toLowerCase() &&
+    !($("v-ok").getAttribute("onclick").includes(`'${v.id}'`)));
+  const valid = plat && $("v-model").value.trim() && $("v-tax").value && parseInt($("v-kapasiti").value) > 0 && !dup;
+  $("v-err").innerHTML = dup ? `<span class="err">No. pendaftaran ini sudah wujud dalam sistem.</span>` : "";
+  $("v-ok").disabled = !valid;
+}
+
+function submitVeh(id){
+  const data = {
+    plat: $("v-plat").value.trim().toUpperCase(),
+    model: $("v-model").value.trim(),
+    jenis: $("v-jenis").value,
+    kapasiti: parseInt($("v-kapasiti").value) || 1,
+    odometer: parseInt($("v-odo").value) || 0,
+    bahanApi: Math.min(100, Math.max(0, parseInt($("v-fuel").value) || 0)),
+    roadtax: $("v-tax").value,
+    status: $("v-status").value,
+    lokasi: $("v-lokasi").value.trim() || "Garaj Utama",
+  };
+  if(id){
+    Object.assign(veh(id), data);
+    notify(`Kenderaan ${data.plat} dikemas kini.`);
+  } else {
+    vehicles.push({ id: `K${nextVeh++}`, ...data });
+    notify(`Kenderaan ${data.plat} ditambah ke senarai kenderaan.`);
+  }
+  closeModal(); sync();
+}
+
+function askDelVehicle(id){
+  const v = veh(id);
+  const aktif = bookings.filter(b => b.vehicleId === id && b.status === "diluluskan");
+  if(aktif.length){
+    confirmModal("Tidak Boleh Dipadam",
+      `Kenderaan <b>${esc(v.plat)}</b> mempunyai ${aktif.length} tempahan aktif yang diluluskan (${aktif.map(a=>a.id).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
+      null);
+    return;
+  }
+  confirmModal("Padam Kenderaan",
+    `Anda pasti mahu memadam <b>${esc(v.plat)} — ${esc(v.model)}</b> daripada rekod kenderaan? Tindakan ini tidak boleh dibatalkan.`,
+    () => {
+      vehicles = vehicles.filter(x => x.id !== id);
+      closeModal(); sync(); notify(`Kenderaan ${v.plat} dipadam.`);
+    });
+}
+
+/* ============================================================
+   TAMBAH / EDIT / PADAM PEMANDU
+   ============================================================ */
+function openDrvForm(id){
+  const d = id ? drv(id) : null;
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-h"><h3>${d ? "Edit Pemandu" : "Tambah Pemandu Baharu"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <label class="fld"><span>Nama Penuh</span><input id="d-nama" value="${d?esc(d.nama):""}" placeholder="cth: En. Ahmad bin Ali" oninput="checkDrvForm()"></label>
+        <div class="row2">
+          <label class="fld"><span>No. Telefon</span><input id="d-tel" value="${d?esc(d.telefon):""}" placeholder="cth: 012-345 6789" oninput="checkDrvForm()"></label>
+          <label class="fld"><span>Kelas Lesen</span><input id="d-lesen" value="${d?esc(d.lesen):""}" placeholder="cth: D, E, GDL" oninput="checkDrvForm()"></label>
+        </div>
+        <label class="fld"><span>Status</span>
+          <select id="d-status">
+            <option value="bertugas" ${!d||d.status==="bertugas"?"selected":""}>Bertugas</option>
+            <option value="cuti" ${d&&d.status==="cuti"?"selected":""}>Cuti</option>
+          </select>
+        </label>
+        <button class="btn btn-amber" id="d-ok" style="justify-content:center" onclick="submitDrv(${d?`'${d.id}'`:"null"})">
+          ${d ? "Simpan Perubahan" : "Tambah Pemandu"}
+        </button>
+      </div>
+    </div>
+  </div>`;
+  checkDrvForm();
+}
+
+function checkDrvForm(){
+  $("d-ok").disabled = !($("d-nama").value.trim() && $("d-tel").value.trim() && $("d-lesen").value.trim());
+}
+
+function submitDrv(id){
+  const data = {
+    nama: $("d-nama").value.trim(),
+    telefon: $("d-tel").value.trim(),
+    lesen: $("d-lesen").value.trim(),
+    status: $("d-status").value,
+  };
+  if(id){
+    Object.assign(drv(id), data);
+    notify(`Maklumat pemandu dikemas kini.`);
+  } else {
+    drivers.push({ id: `P${nextDrv++}`, ...data });
+    notify(`Pemandu ${data.nama} ditambah.`);
+  }
+  closeModal(); sync();
+}
+
+function askDelDriver(id){
+  const d = drv(id);
+  const aktif = bookings.filter(b => b.driverId === id && b.status === "diluluskan");
+  if(aktif.length){
+    confirmModal("Tidak Boleh Dipadam",
+      `Pemandu <b>${esc(d.nama)}</b> mempunyai ${aktif.length} tugasan aktif (${aktif.map(a=>a.id).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
+      null);
+    return;
+  }
+  confirmModal("Padam Pemandu",
+    `Anda pasti mahu memadam <b>${esc(d.nama)}</b> daripada senarai pemandu? Tindakan ini tidak boleh dibatalkan.`,
+    () => {
+      drivers = drivers.filter(x => x.id !== id);
+      closeModal(); sync(); notify(`Pemandu ${d.nama} dipadam.`);
+    });
+}
+
+/* ---------- Modal pengesahan generik ---------- */
+let _confirmCb = null;
+function confirmModal(title, htmlMsg, onYes, yesLabel, yesClass){
+  _confirmCb = onYes;
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-h"><h3>${esc(title)}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="confirm-txt">${htmlMsg}</div>
+        <div class="btn-row">
+          ${onYes
+            ? `<button class="btn ${yesClass || "btn-red"}" onclick="_confirmCb()">${yesLabel || "🗑 Ya, Padam"}</button>
+               <button class="btn btn-dark" style="flex:1;justify-content:center" onclick="closeModal()">Batal</button>`
+            : `<button class="btn btn-dark" style="flex:1;justify-content:center" onclick="closeModal()">Faham</button>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Mula */
+mulaApp();
+
+/* PWA: daftar service worker (perlukan HTTPS & hosting sebenar) */
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

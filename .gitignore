@@ -1,0 +1,13 @@
+# Node 18 mudah-alih (binari besar, khusus mesin ini — jangan commit)
+.node18/
+
+# Kredensial clasp global disimpan di HOME (~/.clasprc.json), bukan di sini —
+# tapi abaikan juga kalau-kalau disalin ke dalam projek
+.clasprc.json
+gas/.clasprc.json
+
+# Fail sementara / OS
+*.log
+Thumbs.db
+Desktop.ini
+.DS_Store
