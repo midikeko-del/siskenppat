@@ -29,6 +29,8 @@ const SHEET_DEFS = {
   Pengguna:     ["userId","nama","peranan","passwordHash","salt","driverId"],
   Sesi:         ["token","userId","tamat"],
   Tetapan:      ["key","value"],
+  Keselamatan:  ["userId","gagal","kunciSehingga"],   // kawalan cubaan log masuk
+  Log:          ["masa","userId","tindakan","tempahanId","butiran"], // jejak audit
 };
 
 const MAP = {
@@ -38,7 +40,11 @@ const MAP = {
   Selenggaraan: "maintenance",
 };
 
-const NUMERIC = new Set(["kapasiti","odometer","bahanApi","penumpang","kos","value","tamat"]);
+const NUMERIC = new Set(["kapasiti","odometer","bahanApi","penumpang","kos","value","tamat","gagal","kunciSehingga"]);
+
+/* Kawalan brute-force log masuk */
+const MAX_CUBAAN = 5;     // cubaan gagal sebelum dikunci
+const KUNCI_MINIT = 15;   // tempoh kunci (minit)
 
 /* ---------- JALANKAN SEKALI: setup, kebenaran & admin pertama ---------- */
 function setup() {
@@ -230,9 +236,11 @@ function doPost(e) {
       } else if (d.action === "bookingComplete") {
         res = bookingComplete_(ss, user, d);
       } else if (d.action === "bookingApprove") {
-        res = adminSahaja_(user) || bookingApprove_(ss, d);
+        res = adminSahaja_(user) || bookingApprove_(ss, user, d);
       } else if (d.action === "bookingReject") {
-        res = adminSahaja_(user) || bookingReject_(ss, d);
+        res = adminSahaja_(user) || bookingReject_(ss, user, d);
+      } else if (d.action === "auditLog") {
+        res = adminSahaja_(user) || { ok: true, log: readSheet_(ss, "Log").slice(-200).reverse() };
       } else if (d.action === "logout") {
         writeSheet_(ss, "Sesi", readSheet_(ss, "Sesi").filter(s => s.token !== d.token));
         res = { ok: true };
@@ -242,10 +250,13 @@ function doPost(e) {
         res = drvStatus_(ss, user, d);
       } else if (d.action === "userAdd") {
         res = adminSahaja_(user) || userAdd_(ss, d);
+        if (res.ok) logAudit_(ss, user.userId, "Tambah Pengguna", "", String(d.userId || ""));
       } else if (d.action === "userReset") {
         res = adminSahaja_(user) || userReset_(ss, d);
+        if (res.ok) logAudit_(ss, user.userId, "Reset Kata Laluan", "", String(d.userId || ""));
       } else if (d.action === "userDel") {
         res = adminSahaja_(user) || userDel_(ss, user, d);
+        if (res.ok) logAudit_(ss, user.userId, "Padam Pengguna", "", String(d.userId || ""));
       } else {
         res = { ok: false, ralat: "Tindakan tidak dikenali." };
       }
@@ -265,13 +276,45 @@ function adminSahaja_(user) {
 }
 
 /* ---------- Log masuk ---------- */
+/* ---------- Kawalan cubaan log masuk (anti brute-force) ---------- */
+function bacaCubaan_(ss, userId) {
+  return readSheet_(ss, "Keselamatan").find(x => x.userId === userId) || null;
+}
+function tulisCubaan_(ss, userId, gagal, kunciSehingga) {
+  const semua = readSheet_(ss, "Keselamatan").filter(x => x.userId !== userId);
+  if (gagal > 0 || kunciSehingga > 0) semua.push({ userId: userId, gagal: gagal, kunciSehingga: kunciSehingga });
+  writeSheet_(ss, "Keselamatan", semua);
+}
+
 function login_(ss, d) {
-  const u = readSheet_(ss, "Pengguna").find(x => x.userId === String(d.userId || "").trim());
-  if (!u || hash_(u.salt, d.password) !== u.passwordHash) {
-    Utilities.sleep(500); // perlahankan cubaan meneka kata laluan
-    return { ok: false, ralat: "ID pengguna atau kata laluan salah." };
+  const userId = String(d.userId || "").trim();
+  const now = Date.now();
+  const rec = bacaCubaan_(ss, userId);
+
+  // 1) Akaun sedang dikunci?
+  if (rec && Number(rec.kunciSehingga) > now) {
+    const minit = Math.ceil((Number(rec.kunciSehingga) - now) / 60000);
+    return { ok: false, ralat: "Akaun dikunci sementara kerana terlalu banyak cubaan. Cuba lagi dalam " + minit + " minit." };
   }
+
+  const u = readSheet_(ss, "Pengguna").find(x => x.userId === userId);
+  // 2) Kata laluan salah → naikkan kiraan, kunci jika cukup
+  if (!u || hash_(u.salt, d.password) !== u.passwordHash) {
+    const gagal = (rec ? Number(rec.gagal) : 0) + 1;
+    const dikunci = gagal >= MAX_CUBAAN;
+    tulisCubaan_(ss, userId, dikunci ? 0 : gagal, dikunci ? now + KUNCI_MINIT * 60000 : 0);
+    Utilities.sleep(500);
+    if (dikunci)
+      return { ok: false, ralat: "Terlalu banyak cubaan gagal. Akaun dikunci " + KUNCI_MINIT + " minit." };
+    const baki = MAX_CUBAAN - gagal;
+    return { ok: false, ralat: "ID pengguna atau kata laluan salah." +
+      (baki <= 2 ? " (" + baki + " cubaan lagi sebelum dikunci)" : "") };
+  }
+
+  // 3) Berjaya → kosongkan kiraan & log
+  if (rec) tulisCubaan_(ss, userId, 0, 0);
   const user = { userId: u.userId, nama: u.nama, peranan: u.peranan, driverId: u.driverId || null };
+  logAudit_(ss, u.userId, "Log Masuk", "", "");
   return { ok: true, token: bukaSesi_(ss, u.userId), user: user, data: buildData_(ss, user) };
 }
 
@@ -296,6 +339,13 @@ function save_(ss, user, data) {
 /* ---------- Masa semasa zon KL (dijana server, bukan peranti client) ---------- */
 function nowKL_() {
   return Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm");
+}
+
+/* ---------- Jejak audit: catat siapa buat apa, bila ---------- */
+function logAudit_(ss, userId, tindakan, tempahanId, butiran) {
+  try {
+    ss.getSheetByName("Log").appendRow([nowKL_(), userId || "", tindakan, tempahanId || "", butiran || ""]);
+  } catch (e) { /* jangan biar kegagalan log menggagalkan operasi utama */ }
 }
 
 /* ---------- ID tempahan seterusnya (berdasarkan rekod sedia ada di server) ---------- */
@@ -333,13 +383,16 @@ function bookingAdd_(ss, user, b) {
   };
   if (!rec.pemohon || !rec.tujuan || !rec.destinasi || !rec.tarikh || !rec.masaMula)
     return { ok: false, ralat: "Maklumat tempahan tidak lengkap." };
-  const hariIni = nowKL_().slice(0, 10);
+  const now = nowKL_(), hariIni = now.slice(0, 10), masaIni = now.slice(11, 16);
   if (rec.tarikh < hariIni)
     return { ok: false, ralat: "Tarikh tempahan tidak boleh pada masa lampau." };
+  if (rec.tarikh === hariIni && rec.masaMula < masaIni)
+    return { ok: false, ralat: "Masa mula tempahan sudah berlalu." };
   if (rec.tarikhTamat && rec.tarikhTamat < rec.tarikh)
     return { ok: false, ralat: "Tarikh tamat mesti pada atau selepas tarikh mula." };
   semua.unshift(rec);
   writeSheet_(ss, "Tempahan", semua);
+  logAudit_(ss, user.userId, "Tempahan Baharu", rec.id, rec.destinasi);
   return { ok: true, booking: rec };
 }
 
@@ -361,6 +414,7 @@ function bookingComplete_(ss, user, d) {
   if (!b.masaTamat) b.masaTamat = bhg[1];
   if (bhg[0] !== b.tarikh) b.tarikhTamat = bhg[0];
   writeSheet_(ss, "Tempahan", semua);
+  logAudit_(ss, user.userId, "Selesai", b.id, b.masaSelesai);
   return { ok: true, booking: b };
 }
 
@@ -374,7 +428,7 @@ function bertindih_(a, b) {
 }
 
 /* ---------- Luluskan tempahan (admin) — konflik disahkan di SERVER ---------- */
-function bookingApprove_(ss, d) {
+function bookingApprove_(ss, user, d) {
   const semua = readSheet_(ss, "Tempahan");
   const b = semua.find(x => x.id === d.id);
   if (!b) return { ok: false, ralat: "Tempahan tidak dijumpai." };
@@ -407,11 +461,12 @@ function bookingApprove_(ss, d) {
   b.vehicleId = vId;
   b.driverId = dId;
   writeSheet_(ss, "Tempahan", semua);
+  logAudit_(ss, user.userId, "Lulus", b.id, vId + " / " + dId);
   return { ok: true, booking: b };
 }
 
 /* ---------- Tolak tempahan (admin) ---------- */
-function bookingReject_(ss, d) {
+function bookingReject_(ss, user, d) {
   const semua = readSheet_(ss, "Tempahan");
   const b = semua.find(x => x.id === d.id);
   if (!b) return { ok: false, ralat: "Tempahan tidak dijumpai." };
@@ -419,6 +474,7 @@ function bookingReject_(ss, d) {
     return { ok: false, ralat: "Hanya tempahan menunggu boleh ditolak." };
   b.status = "ditolak";
   writeSheet_(ss, "Tempahan", semua);
+  logAudit_(ss, user.userId, "Tolak", b.id, "");
   return { ok: true, booking: b };
 }
 
