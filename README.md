@@ -41,14 +41,17 @@ sisken/
 | API_URL (dalam `js/core.js`) | `https://script.google.com/macros/s/AKfycbzIv8zPV-KG…/exec` |
 | Akaun Google pemilik Sheet | midikeko@gmail.com |
 
-## 4. Pindah ke PC lain (pilih SATU)
-**Tiada git remote lagi.** Cara pindah:
-- **A — Salin folder:** salin SELURUH folder `sisken` (USB/Google Drive) ke PC baharu. Sejarah git (`.git`) ikut sekali. Folder `.node18` mungkin tak berfungsi di PC lain → pasang semula (langkah 5).
-- **B — Push ke GitHub (private!):** repo ada API_URL & scriptId, jadi mesti **PRIVATE**.
-  ```bash
-  gh repo create siskenppat --private --source=. --push   # perlu gh + login GitHub
-  ```
-  Di PC baharu: `git clone <url>` kemudian ikut langkah 5.
+## 4. Pindah ke PC lain
+Repo ada di **GitHub (PRIVATE):** `https://github.com/midikeko-del/siskenppat`
+Di PC baharu:
+```bash
+gh auth login          # log masuk akaun GitHub midikeko-del
+gh repo clone midikeko-del/siskenppat
+# ATAU: git clone https://github.com/midikeko-del/siskenppat.git
+```
+Kemudian ikut langkah 5 (setup clasp) kalau nak deploy backend.
+> `.node18/` dan `public/` TIDAK disimpan dalam git (gitignore) — jana/pasang semula di PC baharu.
+> Selepas buat perubahan: `git add -A && git commit -m "…" && git push`.
 
 ## 5. Setup di PC baharu (untuk deploy backend via clasp)
 > Hanya perlu kalau nak `clasp push` backend. Untuk edit frontend sahaja, tak perlu.
