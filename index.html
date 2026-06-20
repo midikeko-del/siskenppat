@@ -288,15 +288,19 @@ function tambahHari(iso, n){
   dt.setUTCDate(dt.getUTCDate() + n);
   return dt.toISOString().slice(0, 10);
 }
+/* Array 7 hari (Ahad–Sabtu) untuk minggu pada offset tertentu (0 = minggu ini,
+   -1 = minggu lepas, +1 = minggu hadapan). Minggu Terengganu bermula Ahad. */
+function mingguUntuk(offset){
+  const hari = new Date(HARI_INI + "T00:00:00Z").getUTCDay(); // 0 = Ahad
+  const ahad = tambahHari(HARI_INI, -hari + offset * 7);
+  return Array.from({ length: 7 }, (_, i) => tambahHari(ahad, i));
+}
 /* HARI_INI & MINGGU dikira SEMULA setiap render (lihat render()) supaya tetap
    betul walaupun app dibuka melepasi tengah malam tanpa reload. */
 let HARI_INI, MINGGU;
 function segarTarikh(){
   HARI_INI = klNow().tarikh; // tarikh hari ini di Malaysia
-  // Minggu PENUH semasa (Ahad–Sabtu) — minggu Terengganu bermula Ahad
-  const hari = new Date(HARI_INI + "T00:00:00Z").getUTCDay(); // 0 = Ahad
-  const ahad = tambahHari(HARI_INI, -hari);
-  MINGGU = Array.from({ length: 7 }, (_, i) => tambahHari(ahad, i));
+  MINGGU = mingguUntuk(0);   // minggu semasa (untuk paparan umum)
 }
 segarTarikh();
 const HARI = ["Ahad","Isnin","Selasa","Rabu","Khamis","Jumaat","Sabtu"];
@@ -340,6 +344,7 @@ let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
 let selFilter = "semua";
 let tab = "dashboard";
 let editVehId = null; // id kenderaan yang sedang diedit (null = tambah baharu)
+let mingguOffset = 0; // offset minggu jadual pemandu (0 = minggu ini)
 
 const VSTATUS = {
   tersedia:{label:"Tersedia", cls:"green"},
@@ -1026,13 +1031,17 @@ function renderKenderaan(){
 }
 
 /* ---------- JADUAL PEMANDU ---------- */
+function mingguNav(delta){ mingguOffset += delta; render(); }
+function mingguIni(){ mingguOffset = 0; render(); }
+
 function renderPemandu(){
-  const head = MINGGU.map((t,i) =>
+  const minggu = mingguUntuk(mingguOffset);
+  const head = minggu.map((t,i) =>
     `<th style="${t===HARI_INI?'color:var(--amber-d)':''}">${HARI[i]}<br><span style="font-weight:400;text-transform:none">${fmtTarikh(t)}</span></th>`
   ).join("");
 
   const rows = pemanduAktif().map(d => {
-    const cells = MINGGU.map(tarikh => {
+    const cells = minggu.map(tarikh => {
       const cls = tarikh === HARI_INI ? "today" : "";
       if(d.status === "cuti") return `<td class="${cls}"><span class="off">Cuti</span></td>`;
       const tugas = bookings.filter(b => b.driverId === d.id && dudukiHari(b, tarikh) && (b.status==="diluluskan"||b.status==="selesai"));
@@ -1058,16 +1067,34 @@ function renderPemandu(){
     </tr>`;
   }).join("");
 
+  const labelMinggu = mingguOffset === 0 ? "Minggu Ini"
+    : mingguOffset === 1 ? "Minggu Hadapan"
+    : mingguOffset === -1 ? "Minggu Lepas"
+    : (mingguOffset > 0 ? `${mingguOffset} minggu akan datang` : `${-mingguOffset} minggu lepas`);
+
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-      <h2 class="sect">Jadual Pemandu — Minggu ${fmtTarikh(MINGGU[0])} hingga ${fmtTarikh(MINGGU[6])}</h2>
+      <h2 class="sect">Jadual Pemandu</h2>
       <button class="btn btn-amber" onclick="openDrvForm()">＋ Tambah Pemandu</button>
     </div>
-    <div class="card tbl-scroll">
-      <table class="sched">
-        <thead><tr><th>Pemandu</th>${head}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+    <div class="card">
+      <div class="card-h">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-dark" style="padding:7px 14px;font-size:17px;line-height:1" onclick="mingguNav(-1)" title="Minggu sebelum">‹</button>
+          <button class="btn ${mingguOffset===0?'btn-dark':'btn-amber'}" style="padding:8px 14px" onclick="mingguIni()">📅 Minggu Ini</button>
+          <button class="btn btn-dark" style="padding:7px 14px;font-size:17px;line-height:1" onclick="mingguNav(1)" title="Minggu seterusnya">›</button>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700">${fmtTarikh(minggu[0])} – ${fmtTarikh(minggu[6])}</div>
+          <div class="muted">${labelMinggu}</div>
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table class="sched">
+          <thead><tr><th>Pemandu</th>${head}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
