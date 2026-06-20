@@ -59,6 +59,7 @@
   nav button:hover{background:var(--ink2);color:#fff}
   nav button.active{background:var(--bg);color:var(--ink)}
   .badge{background:var(--amber);color:var(--ink);font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px}
+  .nav-toggle{display:none;align-items:center;gap:8px;width:100%;justify-content:space-between;background:var(--ink2);color:#fff;font-size:14px;font-weight:600;padding:11px 16px;border-radius:10px;margin-bottom:10px}
 
   main{max-width:1180px;margin:0 auto;padding:24px 20px;display:grid;gap:22px}
   h2.sect{font-size:18px;font-weight:700}
@@ -193,7 +194,11 @@
     .avatar{width:30px;height:30px;font-size:13px}
     .sync{font-size:10px;padding:3px 8px}
     .logout{font-size:12px;padding:6px 10px}
-    nav button{padding:9px 12px;font-size:13px}
+    .nav-toggle{display:flex}
+    nav{display:none;flex-direction:column;gap:3px;overflow:visible;padding-bottom:10px}
+    nav.open{display:flex}
+    nav button{padding:11px 14px;font-size:14px;border-radius:8px;width:100%;justify-content:flex-start;background:var(--ink2);color:#fff}
+    nav button.active{background:var(--amber);color:var(--ink)}
     h2.sect{font-size:16px}
     .stats{grid-template-columns:1fr 1fr;gap:10px}
     .stat{padding:12px 13px;gap:10px}
@@ -242,6 +247,7 @@
         <button class="logout no-print" id="btn-auth" onclick="authBtn()">Login</button>
       </div>
     </div>
+    <button id="nav-toggle" class="nav-toggle no-print" onclick="toggleMenu()" style="display:none">☰ Menu</button>
     <nav id="nav"></nav>
   </div>
 </header>
@@ -422,8 +428,12 @@ function conflicts(booking, vehicleId, driverId){
 }
 
 /* ================= NAVIGASI ================= */
+let menuOpen = false; // keadaan menu hamburger (telefon)
+function toggleMenu(){ menuOpen = !menuOpen; renderNav(); }
+
 function renderNav(){
-  if(!currentUser){ $("nav").innerHTML = ""; return; }
+  const toggle = $("nav-toggle");
+  if(!currentUser){ $("nav").innerHTML = ""; $("nav").classList.remove("open"); if(toggle) toggle.style.display = "none"; return; }
   const menunggu = bookings.filter(b => b.status === "menunggu").length;
   const semua = [
     {id:"dashboard", label:"📊 Papan Pemuka", admin:true},
@@ -442,8 +452,14 @@ function renderNav(){
     <button class="${tab===n.id?'active':''}" onclick="setTab('${n.id}')">
       ${n.label}${n.badge ? `<span class="badge">${n.badge}</span>` : ""}
     </button>`).join("");
+  $("nav").classList.toggle("open", menuOpen);
+  if(toggle){
+    toggle.style.display = ""; // CSS kawal: tersembunyi di desktop, tampil di telefon
+    const aktif = items.find(n => n.id === tab);
+    toggle.innerHTML = `<span>${menuOpen ? "✕ Tutup Menu" : "☰ " + (aktif ? aktif.label : "Menu")}</span>`;
+  }
 }
-function setTab(t){ tab = t; render(); }
+function setTab(t){ tab = t; menuOpen = false; render(); } // pilih tab → tutup menu telefon
 
 /* ================= RENDER UTAMA ================= */
 function render(){
@@ -989,7 +1005,7 @@ function renderKenderaan(){
       </label>
       <label class="fld"><span>Status <span style="text-transform:none;font-weight:400">(Tersedia/Dalam Perjalanan dikira automatik)</span></span>
         <select onchange="updVehicle('${v.id}','status',this.value)">
-          <option value="tersedia" ${v.status!=="selenggara"?"selected":""}>Dalam Khidmat</option>
+          <option value="tersedia" ${v.status!=="selenggara"?"selected":""}>Bersedia</option>
           <option value="selenggara" ${v.status==="selenggara"?"selected":""}>Selenggaraan</option>
         </select>
       </label>
@@ -1798,7 +1814,7 @@ function openVehForm(id){
           <label class="fld"><span>Tamat Cukai Jalan</span><input type="date" id="v-tax" value="${v?v.roadtax:""}" oninput="checkVehForm()"></label>
           <label class="fld"><span>Status</span>
             <select id="v-status">
-              <option value="tersedia" ${!v||v.status!=="selenggara"?"selected":""}>Dalam Khidmat</option>
+              <option value="tersedia" ${!v||v.status!=="selenggara"?"selected":""}>Bersedia</option>
               <option value="selenggara" ${v&&v.status==="selenggara"?"selected":""}>Selenggaraan</option>
             </select>
           </label>
