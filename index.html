@@ -344,7 +344,8 @@ let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
 let selFilter = "semua";
 let tab = "dashboard";
 let editVehId = null; // id kenderaan yang sedang diedit (null = tambah baharu)
-let mingguOffset = 0; // offset minggu jadual pemandu (0 = minggu ini)
+let mingguOffset = 0;     // offset minggu jadual pemandu (admin) — 0 = minggu ini
+let mingguOffsetAwam = 0; // offset minggu jadual pemandu (paparan umum)
 
 const VSTATUS = {
   tersedia:{label:"Tersedia", cls:"green"},
@@ -694,10 +695,11 @@ function renderAwam(){
         </div>`;
       }).join("");
 
-  const head = MINGGU.map((t,i) =>
+  const minggu = mingguUntuk(mingguOffsetAwam);
+  const head = minggu.map((t,i) =>
     `<th style="${t===HARI_INI?'color:var(--amber-d)':''}">${HARI[i]}<br><span style="font-weight:400;text-transform:none">${fmtTarikh(t)}</span></th>`).join("");
   const gRows = pemanduAktif().map(d => {
-    const cells = MINGGU.map(tarikh => {
+    const cells = minggu.map(tarikh => {
       const cls = tarikh === HARI_INI ? "today" : "";
       if(d.status === "cuti") return `<td class="${cls}"><span class="off">Cuti</span></td>`;
       const tugas = bookings.filter(b => b.driverId === d.id && dudukiHari(b, tarikh) && (b.status==="diluluskan"||b.status==="selesai"));
@@ -717,10 +719,20 @@ function renderAwam(){
       ${rows}
     </div>
     <div class="card">
-      <div class="card-h"><h3>👥 Jadual Pemandu Minggu Ini</h3></div>
+      <div class="card-h">
+        <h3>👥 Jadual Pemandu</h3>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="muted">${fmtTarikh(minggu[0])} – ${fmtTarikh(minggu[6])}</span>
+          <button class="btn btn-dark" style="padding:6px 12px;font-size:16px;line-height:1" onclick="mingguNavAwam(-1)" title="Minggu sebelum">‹</button>
+          <button class="btn ${mingguOffsetAwam===0?'btn-dark':'btn-amber'}" style="padding:7px 12px" onclick="mingguIniAwam()">Minggu Ini</button>
+          <button class="btn btn-dark" style="padding:6px 12px;font-size:16px;line-height:1" onclick="mingguNavAwam(1)" title="Minggu seterusnya">›</button>
+        </div>
+      </div>
       <div class="tbl-scroll"><table class="sched"><thead><tr><th>Pemandu</th>${head}</tr></thead><tbody>${gRows}</tbody></table></div>
     </div>`;
 }
+function mingguNavAwam(delta){ mingguOffsetAwam += delta; render(); }
+function mingguIniAwam(){ mingguOffsetAwam = 0; render(); }
 
 /* ============================================================
    TUGASAN PEMANDU
