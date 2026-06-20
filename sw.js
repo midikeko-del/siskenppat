@@ -4,11 +4,24 @@
    terkini bila online), fallback ke cache bila luar talian.
    Permintaan ke API Apps Script TIDAK di-cache.
    ============================================================ */
-const CACHE = "sisken-v6"; // naikkan nombor (v2, v3...) bila kemas kini app
+const CACHE = "sisken-v7"; // naikkan nombor (v2, v3...) bila kemas kini app
 
 const ASET = [
   "./",
   "./index.html",
+  "./style.css",
+  "./js/core.js",
+  "./js/awam.js",
+  "./js/dashboard.js",
+  "./js/tempahan.js",
+  "./js/kenderaan.js",
+  "./js/pemandu.js",
+  "./js/selenggara.js",
+  "./js/laporan.js",
+  "./js/pengguna.js",
+  "./js/tugasan.js",
+  "./js/log.js",
+  "./js/boot.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
