@@ -17,7 +17,11 @@ function renderTempahan(){
         ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)} &nbsp;|&nbsp; ${esc(d.nama)}</div>` : ""}
         ${b.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(b.masaSelesai)}</div>` : ""}
       </div>
-      ${isAdmin() && b.status === "menunggu" ? `<div><button class="btn btn-dark" onclick="openApprove('${b.id}')">Proses ›</button></div>` : ""}
+      ${isAdmin() && (b.status === "menunggu" || b.status === "diluluskan") ? `
+      <div style="display:flex;flex-direction:column;gap:8px;align-self:flex-start">
+        ${b.status === "menunggu" ? `<button class="btn btn-dark" onclick="openApprove('${b.id}')">Proses ›</button>` : ""}
+        <button class="btn btn-edit" onclick="openEditForm('${b.id}')">✎ Edit</button>
+      </div>` : ""}
     </div>`;
   }).join("");
 
@@ -228,5 +232,125 @@ async function submitForm(){
   }catch(e){
     $("f-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
     btn.disabled = false; btn.textContent = "Hantar Tempahan";
+  }
+}
+
+/* ---------- Modal: edit tempahan (admin sahaja) ----------
+ * Hanya boleh diedit SELAGI tempahan belum bermula. SOP sama dengan
+ * permohonan baharu — tiada pertindihan jadual dibenarkan. */
+function openEditForm(id){
+  const b = bookings.find(x => x.id === id);
+  if(!b) return;
+  /* Tempahan sudah bermula → tiada perubahan dibenarkan */
+  if(mulaDT(b) <= skrgStr()){
+    notify("Tempahan sedang berjalan. Tiada perubahan dibenarkan.", "warn");
+    return;
+  }
+  const v = veh(b.vehicleId), d = drv(b.driverId);
+  $("modal-root").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-h"><h3>Edit Tempahan ${b.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        ${b.status === "diluluskan" && v ? `<div class="summary" style="margin-bottom:14px">Tugasan semasa: <b>${esc(v.plat)}</b> ${esc(v.model)}${d ? " — " + esc(d.nama) : ""}<br><span class="muted">Perubahan tarikh/masa mesti tiada pertindihan dengan tugasan kenderaan/pemandu ini.</span></div>` : ""}
+        <div class="row2">
+          <label class="fld"><span>Nama Pemohon</span><input id="e-pemohon" value="${esc(b.pemohon)}" oninput="checkEditForm('${b.id}')"></label>
+          <label class="fld"><span>Bahagian / Unit</span><input id="e-bahagian" value="${esc(b.bahagian)}" oninput="checkEditForm('${b.id}')"></label>
+        </div>
+        <label class="fld"><span>Tujuan Perjalanan</span><input id="e-tujuan" value="${esc(b.tujuan)}" oninput="checkEditForm('${b.id}')"></label>
+        <label class="fld"><span>Destinasi</span><input id="e-destinasi" value="${esc(b.destinasi)}" oninput="checkEditForm('${b.id}')"></label>
+        <div class="row2">
+          <label class="fld"><span>Tarikh Mula</span><input type="date" id="e-tarikh" value="${b.tarikh}" min="${HARI_INI}" oninput="checkEditForm('${b.id}')"></label>
+          <label class="fld"><span>Tarikh Tamat <span style="text-transform:none;font-weight:400">(pilihan)</span></span><input type="date" id="e-tkh2" value="${b.tarikhTamat || ""}" min="${HARI_INI}" oninput="checkEditForm('${b.id}')"></label>
+        </div>
+        <div class="row4">
+          <label class="fld"><span>Masa Mula</span><input type="time" id="e-mula" value="${b.masaMula}" oninput="checkEditForm('${b.id}')"></label>
+          <label class="fld"><span>Masa Tamat <span style="text-transform:none;font-weight:400">(pilihan)</span></span><input type="time" id="e-tamat" value="${b.masaTamat || ""}" oninput="checkEditForm('${b.id}')"></label>
+          <label class="fld"><span>Penumpang</span><input type="number" id="e-pax" value="${b.penumpang}" min="1" max="44" oninput="checkEditForm('${b.id}')"></label>
+        </div>
+        <div id="e-clash"></div>
+        <div id="e-err"></div>
+        <button class="btn btn-amber" id="e-ok" style="justify-content:center" onclick="submitEdit('${b.id}')">Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>`;
+  checkEditForm(id);
+}
+
+function checkEditForm(id){
+  const b = bookings.find(x => x.id === id);
+  const mula = $("e-mula").value, tamat = $("e-tamat").value;
+  const tkh = $("e-tarikh").value, tkh2 = $("e-tkh2").value;
+  const sehari = !tkh2 || tkh2 === tkh;
+  const tarikhOK = !tkh2 || tkh2 >= tkh;
+  const k = klNow();
+  const tidakLampau = !tkh || tkh > k.tarikh || (tkh === k.tarikh && (!mula || mula >= k.masa));
+  const masaOK = !sehari || !tamat || mula < tamat;
+  const isiOK = $("e-pemohon").value.trim() && $("e-bahagian").value.trim() &&
+                $("e-tujuan").value.trim() && $("e-destinasi").value.trim() && tkh && mula;
+
+  /* Semakan pertindihan (hanya bermakna jika kenderaan/pemandu sudah ditugaskan) */
+  let konflik = [];
+  if(b && (b.vehicleId || b.driverId)){
+    const calon = { id: b.id, tarikh: tkh, tarikhTamat: tkh2 || "", masaMula: mula, masaTamat: tamat };
+    konflik = conflicts(calon, b.vehicleId, b.driverId);
+  }
+  $("e-clash").innerHTML = konflik.length
+    ? `<div class="clash"><b>⚠️ Konflik jadual dikesan:</b>${konflik.map(c =>
+        `<p>• ${c.id} — ${esc(c.destinasi)}, ${fmtTarikh(c.tarikh)} ${paparMasa(c)}</p>`).join("")}</div>`
+    : "";
+
+  let mesej = "";
+  if(!tidakLampau) mesej = `<span class="err">Tarikh/masa tempahan tidak boleh pada masa lampau.</span>`;
+  else if(!tarikhOK) mesej = `<span class="err">Tarikh tamat mesti pada atau selepas tarikh mula.</span>`;
+  else if(sehari && tamat && mula >= tamat) mesej = `<span class="err">Masa tamat mesti selepas masa mula.</span>`;
+  $("e-err").innerHTML = mesej;
+
+  $("e-ok").disabled = !(isiOK && tarikhOK && masaOK && tidakLampau && konflik.length === 0);
+}
+
+async function submitEdit(id){
+  const b = bookings.find(x => x.id === id);
+  if(!b) return;
+  /* Semak semula pada saat hantar — mungkin sudah bermula sejak modal dibuka */
+  if(mulaDT(b) <= skrgStr()){
+    closeModal();
+    notify("Tempahan sedang berjalan. Tiada perubahan dibenarkan.", "warn");
+    render();
+    return;
+  }
+  const patch = {
+    pemohon: $("e-pemohon").value.trim(),
+    bahagian: $("e-bahagian").value.trim(),
+    tujuan: $("e-tujuan").value.trim(),
+    destinasi: $("e-destinasi").value.trim(),
+    tarikh: $("e-tarikh").value,
+    tarikhTamat: $("e-tkh2").value || "",
+    masaMula: $("e-mula").value,
+    masaTamat: $("e-tamat").value,
+    penumpang: parseInt($("e-pax").value) || 1,
+  };
+
+  /* Mod demo / tiada API: simpan setempat sahaja */
+  if(!apiAktif() || !TOKEN){
+    Object.assign(b, patch);
+    closeModal(); render(); notify(`Tempahan ${id} dikemas kini (mod tempatan).`);
+    return;
+  }
+
+  /* Server sahkan semula peraturan masa & konflik sebelum simpan */
+  const btn = $("e-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  try{
+    const res = await api("bookingEdit", { id, ...patch });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("e-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal mengemas kini tempahan.")}</span>`;
+      btn.disabled = false; btn.textContent = "Simpan Perubahan"; return;
+    }
+    Object.assign(b, res.booking);
+    closeModal(); render(); notify(`Tempahan ${id} dikemas kini.`);
+  }catch(e){
+    $("e-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "Simpan Perubahan";
   }
 }

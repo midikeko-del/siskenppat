@@ -153,9 +153,13 @@ const fmtBulan = (ym) => {
   return `${bln[parseInt(m)-1]} ${y}`;
 };
 
-function notify(msg){
+/* type: undefined/"" = berjaya (✔), "warn" = amaran (⚠️), "err" = ralat (✕) */
+function notify(msg, type){
   const t = $("toast");
-  t.innerHTML = `<span style="color:#34d399">✔</span> ${esc(msg)}`;
+  const ikon = type === "warn" ? `<span style="color:#fbbf24">⚠️</span>`
+             : type === "err"  ? `<span style="color:#f87171">✕</span>`
+             :                    `<span style="color:#34d399">✔</span>`;
+  t.innerHTML = `${ikon} ${esc(msg)}`;
   t.classList.add("show");
   clearTimeout(t._tm);
   t._tm = setTimeout(() => t.classList.remove("show"), 3000);

@@ -239,6 +239,8 @@ function doPost(e) {
         res = adminSahaja_(user) || bookingApprove_(ss, user, d);
       } else if (d.action === "bookingReject") {
         res = adminSahaja_(user) || bookingReject_(ss, user, d);
+      } else if (d.action === "bookingEdit") {
+        res = adminSahaja_(user) || bookingEdit_(ss, user, d);
       } else if (d.action === "auditLog") {
         res = adminSahaja_(user) || { ok: true, log: readSheet_(ss, "Log").slice(-200).reverse() };
       } else if (d.action === "logPurge") {
@@ -527,6 +529,73 @@ function bookingReject_(ss, user, d) {
   b.status = "ditolak";
   writeSheet_(ss, "Tempahan", semua);
   logAudit_(ss, user.userId, "Tolak", b.id, "");
+  return { ok: true, booking: b };
+}
+
+/* ---------- Edit tempahan (admin) — hanya SEBELUM tempahan bermula ----------
+ * SOP sama dengan permohonan baharu: tiada pertindihan jadual dibenarkan.
+ * Hanya medan butiran diubah; status, kenderaan, pemandu & userId KEKAL.
+ */
+function bookingEdit_(ss, user, d) {
+  const semua = readSheet_(ss, "Tempahan");
+  const b = semua.find(x => x.id === d.id);
+  if (!b) return { ok: false, ralat: "Tempahan tidak dijumpai." };
+  if (b.status !== "menunggu" && b.status !== "diluluskan")
+    return { ok: false, ralat: "Hanya tempahan menunggu atau diluluskan boleh diedit." };
+
+  // Halang sebarang perubahan selepas tempahan bermula (masa server, bukan client)
+  const now = nowKL_();
+  if ((b.tarikh + " " + b.masaMula) <= now)
+    return { ok: false, ralat: "Tempahan sedang berjalan. Tiada perubahan dibenarkan." };
+
+  const calon = {
+    id: b.id,
+    pemohon: String(d.pemohon || "").trim(),
+    bahagian: String(d.bahagian || "").trim(),
+    tujuan: String(d.tujuan || "").trim(),
+    destinasi: String(d.destinasi || "").trim(),
+    tarikh: String(d.tarikh || "").trim(),
+    masaMula: String(d.masaMula || "").trim(),
+    masaTamat: String(d.masaTamat || "").trim(),
+    tarikhTamat: String(d.tarikhTamat || "").trim(),
+    penumpang: Math.max(1, Number(d.penumpang) || 1),
+  };
+  if (!calon.pemohon || !calon.tujuan || !calon.destinasi || !calon.tarikh || !calon.masaMula)
+    return { ok: false, ralat: "Maklumat tempahan tidak lengkap." };
+
+  const hariIni = now.slice(0, 10), masaIni = now.slice(11, 16);
+  if (calon.tarikh < hariIni)
+    return { ok: false, ralat: "Tarikh tempahan tidak boleh pada masa lampau." };
+  if (calon.tarikh === hariIni && calon.masaMula < masaIni)
+    return { ok: false, ralat: "Masa mula tempahan sudah berlalu." };
+  if (calon.tarikhTamat && calon.tarikhTamat < calon.tarikh)
+    return { ok: false, ralat: "Tarikh tamat mesti pada atau selepas tarikh mula." };
+
+  // Tempahan diluluskan ada kenderaan/pemandu — sahkan tiada pertindihan & kapasiti cukup
+  if (b.status === "diluluskan" && (b.vehicleId || b.driverId)) {
+    const konflik = semua.filter(x =>
+      x.id !== b.id && x.status === "diluluskan" &&
+      bertindih_(x, calon) &&
+      (x.vehicleId === b.vehicleId || x.driverId === b.driverId));
+    if (konflik.length)
+      return { ok: false, ralat: "Konflik jadual dengan " + konflik.map(c => c.id).join(", ") +
+        " — kenderaan/pemandu sudah ditugaskan pada masa bertindih." };
+    const v = readSheet_(ss, "Kenderaan").find(x => x.id === b.vehicleId);
+    if (v && Number(v.kapasiti) < calon.penumpang)
+      return { ok: false, ralat: "Kapasiti kenderaan tidak mencukupi untuk bilangan penumpang." };
+  }
+
+  b.pemohon = calon.pemohon;
+  b.bahagian = calon.bahagian;
+  b.tujuan = calon.tujuan;
+  b.destinasi = calon.destinasi;
+  b.tarikh = calon.tarikh;
+  b.masaMula = calon.masaMula;
+  b.masaTamat = calon.masaTamat;
+  b.tarikhTamat = calon.tarikhTamat;
+  b.penumpang = calon.penumpang;
+  writeSheet_(ss, "Tempahan", semua);
+  logAudit_(ss, user.userId, "Edit Tempahan", b.id, calon.destinasi);
   return { ok: true, booking: b };
 }
 

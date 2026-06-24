@@ -9,6 +9,9 @@ gas/.clasprc.json
 # Folder deploy bersih (salinan fail frontend — dijana semula bila perlu)
 public/
 
+# Konfigurasi tempatan Claude Code (cth launch.json — laluan khusus mesin ini)
+.claude/
+
 # Fail sementara / OS
 *.log
 Thumbs.db
