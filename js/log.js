@@ -25,6 +25,19 @@ function renderLog(){
     <div class="muted" style="padding:4px 2px">Memaparkan 200 rekod terkini. Rekod penuh ada dalam helaian "Log" Google Sheet.</div>`;
 }
 
+/* Tukar butiran kelulusan ID → nama mudah baca.
+   "K4 / P1" → "VHQ 2236 (Toyota Hilux) / En. Azman bin Hashim".
+   Jika ID tak dapat dipadan (cth rekod lama dah tiada), kekalkan nilai asal. */
+function butiranLulus(s){
+  const m = /^\s*(\S+)\s*\/\s*(\S+)\s*$/.exec(String(s || ""));
+  if(!m) return esc(s);                       // bukan format "ID / ID" — papar asal
+  const v = veh(m[1]), d = drv(m[2]);
+  if(!v && !d) return esc(s);                 // tiada padanan langsung — papar asal
+  const vTxt = v ? `${v.plat} (${v.model})` : m[1];
+  const dTxt = d ? d.nama : m[2];
+  return `${esc(vTxt)} <span class="muted">/</span> ${esc(dTxt)}`;
+}
+
 async function muatLog(){
   const b = $("log-body");
   if(!b) return;
@@ -39,7 +52,7 @@ async function muatLog(){
           <td style="font-weight:600">${esc(r.userId)}</td>
           <td>${esc(r.tindakan)}</td>
           <td style="font-family:Consolas,monospace">${esc(r.tempahanId)}</td>
-          <td class="muted">${esc(r.butiran)}</td>
+          <td class="muted">${r.tindakan === "Lulus" ? butiranLulus(r.butiran) : esc(r.butiran)}</td>
         </tr>`).join("")
       : `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--slate-l)">Tiada log lagi.</td></tr>`;
   }catch(e){
