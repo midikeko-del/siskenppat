@@ -1,22 +1,8 @@
 /* SisKEN — tempahan.js (edit di sini) */
 /* ---------- TEMPAHAN ---------- */
-function renderTempahan(){
-  const semuaSaya = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
-  const kiraan = {
-    semua: semuaSaya.length,
-    menunggu: semuaSaya.filter(b => b.status === "menunggu").length,
-    diluluskan: semuaSaya.filter(b => b.status === "diluluskan").length,
-    selesai: semuaSaya.filter(b => b.status === "selesai").length,
-    ditolak: semuaSaya.filter(b => b.status === "ditolak").length,
-  };
-  const senarai = terbaruDahulu(semuaSaya.filter(b => tempahanFilter === "semua" || b.status === tempahanFilter));
-  const penapis = (key, label) => `<button class="btn ${tempahanFilter===key?'btn-amber':'btn-dark'}" style="padding:6px 12px;font-size:13px" onclick="setTempahanFilter('${key}')">${label}${kiraan[key] ? ` (${kiraan[key]})` : ""}</button>`;
-
-  const cards = senarai.length === 0
-    ? `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">${semuaSaya.length === 0 ? 'Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.' : "Tiada tempahan untuk penapis ini."}</div>`
-    : senarai.map(b => {
-    const v = veh(b.vehicleId), d = drv(b.driverId);
-    return `<div class="bk">
+function kadTempahan(b){
+  const v = veh(b.vehicleId), d = drv(b.driverId);
+  return `<div class="bk">
       <div style="flex:1;min-width:260px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span class="id">${b.id}</span>${chip(BSTATUS[b.status])}
@@ -33,20 +19,80 @@ function renderTempahan(){
         <button class="btn btn-edit" onclick="openEditForm('${b.id}')">✎ Edit</button>
       </div>` : ""}
     </div>`;
-  }).join("");
+}
+
+function tempahanTersenarai(semuaSaya){
+  const q = (tempahanCari || "").trim().toLowerCase();
+  return terbaruDahulu(semuaSaya.filter(b => {
+    if(tempahanFilter !== "semua" && b.status !== tempahanFilter) return false;
+    if(!q) return true;
+    return [b.id, b.pemohon, b.bahagian, b.tujuan, b.destinasi].some(x => String(x || "").toLowerCase().includes(q));
+  }));
+}
+
+function tempahanSenaraiHTML(semuaSaya){
+  const senarai = tempahanTersenarai(semuaSaya);
+  if(senarai.length === 0){
+    return `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">${semuaSaya.length === 0 ? 'Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.' : "Tiada tempahan sepadan."}</div>`;
+  }
+  const mula = (tempahanPage - 1) * SAIZ_HALAMAN;
+  const papar = senarai.slice(mula, mula + SAIZ_HALAMAN);
+  return `<div style="display:grid;gap:14px">${papar.map(kadTempahan).join("")}</div>`;
+}
+
+function tempahanPagerHTML(semuaSaya){
+  const senarai = tempahanTersenarai(semuaSaya);
+  const jumHalaman = Math.max(1, Math.ceil(senarai.length / SAIZ_HALAMAN));
+  if(jumHalaman <= 1) return "";
+  if(tempahanPage > jumHalaman) tempahanPage = jumHalaman;
+  const mula = (tempahanPage - 1) * SAIZ_HALAMAN + 1;
+  const akhir = Math.min(tempahanPage * SAIZ_HALAMAN, senarai.length);
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:6px">
+      <span class="muted" style="font-size:13px">Memaparkan ${mula}–${akhir} daripada ${senarai.length}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-dark" style="padding:6px 12px;font-size:13px" ${tempahanPage<=1?"disabled":""} onclick="gerakTempahanPage(-1)">‹ Sebelum</button>
+        <span class="muted" style="font-size:13px">Muka ${tempahanPage} / ${jumHalaman}</span>
+        <button class="btn btn-dark" style="padding:6px 12px;font-size:13px" ${tempahanPage>=jumHalaman?"disabled":""} onclick="gerakTempahanPage(1)">Seterus ›</button>
+      </div>
+    </div>`;
+}
+
+function renderTempahan(){
+  const semuaSaya = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  const kiraan = {
+    semua: semuaSaya.length,
+    menunggu: semuaSaya.filter(b => b.status === "menunggu").length,
+    diluluskan: semuaSaya.filter(b => b.status === "diluluskan").length,
+    selesai: semuaSaya.filter(b => b.status === "selesai").length,
+    ditolak: semuaSaya.filter(b => b.status === "ditolak").length,
+  };
+  const penapis = (key, label) => `<button class="btn ${tempahanFilter===key?'btn-amber':'btn-dark'}" style="padding:6px 12px;font-size:13px" onclick="setTempahanFilter('${key}')">${label}${kiraan[key] ? ` (${kiraan[key]})` : ""}</button>`;
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <h2 class="sect">${isAdmin() ? "Senarai Tempahan" : "Tempahan Saya"}</h2>
       <button class="btn btn-amber" onclick="openForm()">＋ Tempahan Baharu</button>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-      ${penapis("semua","Semua")}${penapis("menunggu","Menunggu")}${penapis("diluluskan","Diluluskan")}${penapis("selesai","Selesai")}${penapis("ditolak","Ditolak")}
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${penapis("semua","Semua")}${penapis("menunggu","Menunggu")}${penapis("diluluskan","Diluluskan")}${penapis("selesai","Selesai")}${penapis("ditolak","Ditolak")}
+      </div>
+      <input id="tp-cari" type="text" value="${esc(tempahanCari)}" placeholder="🔍 Cari ID, pemohon, destinasi, tujuan…" style="width:auto;min-width:240px" oninput="onTempahanCari(this.value)">
     </div>
-    <div style="display:grid;gap:14px">${cards}</div>`;
+    <div id="tp-cards">${tempahanSenaraiHTML(semuaSaya)}</div>
+    <div id="tp-pager">${tempahanPagerHTML(semuaSaya)}</div>`;
 }
 
-function setTempahanFilter(f){ tempahanFilter = f; render(); }
+function segarTempahanSenarai(){
+  const semuaSaya = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  $("tp-cards").innerHTML = tempahanSenaraiHTML(semuaSaya);
+  $("tp-pager").innerHTML = tempahanPagerHTML(semuaSaya);
+}
+
+function onTempahanCari(v){ tempahanCari = v; tempahanPage = 1; segarTempahanSenarai(); }
+function gerakTempahanPage(d){ tempahanPage += d; segarTempahanSenarai(); }
+function setTempahanFilter(f){ tempahanFilter = f; tempahanPage = 1; render(); }
 async function complete(id){
   const b = bookings.find(b => b.id === id);
   /* Mod demo / tiada API */

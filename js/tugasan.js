@@ -1,4 +1,57 @@
 /* SisKEN — tugasan.js (edit di sini) */
+function kadTugasan(t, butang){
+  const v = veh(t.vehicleId);
+  return `<div class="bk">
+      <div style="flex:1;min-width:240px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="id">${t.id}</span>${chip(BSTATUS[t.status])}</div>
+        <h4>${esc(t.tujuan)}</h4>
+        <div class="meta">📍 ${esc(t.destinasi)} &nbsp;·&nbsp; ${paparTarikh(t)}, ${paparMasa(t)} &nbsp;·&nbsp; ${t.penumpang} penumpang</div>
+        <div class="who">${esc(t.pemohon || "")}${t.bahagian ? " — " + esc(t.bahagian) : ""}</div>
+        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}</div>` : ""}
+        ${t.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(t.masaSelesai)}</div>` : ""}
+      </div>
+      ${butang ? `<div><button class="btn btn-green" style="flex:none" onclick="siapTugas('${t.id}')">✔ Tandakan Selesai</button></div>` : ""}
+    </div>`;
+}
+
+function tugasanTersenarai(semuaTugasan){
+  const q = (tugasanCari || "").trim().toLowerCase();
+  return terbaruDahulu(semuaTugasan.filter(t => {
+    if(tugasanFilter === "aktif" && t.status !== "diluluskan") return false;
+    if(tugasanFilter === "selesai" && t.status !== "selesai") return false;
+    if(!q) return true;
+    return [t.id, t.pemohon, t.bahagian, t.tujuan, t.destinasi].some(x => String(x || "").toLowerCase().includes(q));
+  }));
+}
+
+function tugasanSenaraiHTML(semuaTugasan){
+  const senarai = tugasanTersenarai(semuaTugasan);
+  if(senarai.length === 0){
+    return `<div class="card" style="padding:32px;text-align:center;color:var(--slate-l)">${tugasanFilter === "aktif" && !tugasanCari ? "Tiada tugasan aktif buat masa ini. 👍" : "Tiada rekod sepadan."}</div>`;
+  }
+  const mula = (tugasanPage - 1) * SAIZ_HALAMAN;
+  const papar = senarai.slice(mula, mula + SAIZ_HALAMAN);
+  return `<div style="display:grid;gap:14px">${papar.map(t => kadTugasan(t, t.status === "diluluskan")).join("")}</div>`;
+}
+
+function tugasanPagerHTML(semuaTugasan){
+  const senarai = tugasanTersenarai(semuaTugasan);
+  const jumHalaman = Math.max(1, Math.ceil(senarai.length / SAIZ_HALAMAN));
+  if(jumHalaman <= 1) return "";
+  if(tugasanPage > jumHalaman) tugasanPage = jumHalaman;
+  const mula = (tugasanPage - 1) * SAIZ_HALAMAN + 1;
+  const akhir = Math.min(tugasanPage * SAIZ_HALAMAN, senarai.length);
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:6px">
+      <span class="muted" style="font-size:13px">Memaparkan ${mula}–${akhir} daripada ${senarai.length}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-dark" style="padding:6px 12px;font-size:13px" ${tugasanPage<=1?"disabled":""} onclick="gerakTugasanPage(-1)">‹ Sebelum</button>
+        <span class="muted" style="font-size:13px">Muka ${tugasanPage} / ${jumHalaman}</span>
+        <button class="btn btn-dark" style="padding:6px 12px;font-size:13px" ${tugasanPage>=jumHalaman?"disabled":""} onclick="gerakTugasanPage(1)">Seterus ›</button>
+      </div>
+    </div>`;
+}
+
 function renderTugasan(){
   const me = currentUser.driverId;
   if(!me) return `<h2 class="sect">Tugasan Saya</h2>
@@ -12,27 +65,7 @@ function renderTugasan(){
     selesai: semuaTugasan.filter(b => b.status === "selesai").length,
     semua: semuaTugasan.length,
   };
-  const senarai = terbaruDahulu(semuaTugasan.filter(b => {
-    if(tugasanFilter === "semua") return true;
-    if(tugasanFilter === "aktif") return b.status === "diluluskan";
-    return b.status === "selesai";
-  }));
   const penapis = (key, label) => `<button class="btn ${tugasanFilter===key?'btn-amber':'btn-dark'}" style="padding:6px 12px;font-size:13px" onclick="setTugasanFilter('${key}')">${label}${kiraan[key] ? ` (${kiraan[key]})` : ""}</button>`;
-
-  const kad = (t, butang) => {
-    const v = veh(t.vehicleId);
-    return `<div class="bk">
-      <div style="flex:1;min-width:240px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="id">${t.id}</span>${chip(BSTATUS[t.status])}</div>
-        <h4>${esc(t.tujuan)}</h4>
-        <div class="meta">📍 ${esc(t.destinasi)} &nbsp;·&nbsp; ${paparTarikh(t)}, ${paparMasa(t)} &nbsp;·&nbsp; ${t.penumpang} penumpang</div>
-        <div class="who">${esc(t.pemohon || "")}${t.bahagian ? " — " + esc(t.bahagian) : ""}</div>
-        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}</div>` : ""}
-        ${t.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(t.masaSelesai)}</div>` : ""}
-      </div>
-      ${butang ? `<div><button class="btn btn-green" style="flex:none" onclick="siapTugas('${t.id}')">✔ Tandakan Selesai</button></div>` : ""}
-    </div>`;
-  };
 
   const saya = drv(me);
   const statusPanel = saya ? `
@@ -52,15 +85,26 @@ function renderTugasan(){
   return `
     <h2 class="sect">Tugasan Saya — ${esc(saya ? saya.nama : currentUser.nama)}</h2>
     ${statusPanel}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0">
-      ${penapis("aktif","Aktif")}${penapis("selesai","Selesai")}${penapis("semua","Semua")}
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:4px 0">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${penapis("aktif","Aktif")}${penapis("selesai","Selesai")}${penapis("semua","Semua")}
+      </div>
+      <input id="tg-cari" type="text" value="${esc(tugasanCari)}" placeholder="🔍 Cari ID, destinasi, tujuan…" style="width:auto;min-width:240px" oninput="onTugasanCari(this.value)">
     </div>
-    ${senarai.length === 0
-      ? `<div class="card" style="padding:32px;text-align:center;color:var(--slate-l)">${tugasanFilter === "aktif" ? "Tiada tugasan aktif buat masa ini. 👍" : "Tiada rekod untuk penapis ini."}</div>`
-      : `<div style="display:grid;gap:14px">${senarai.map(t => kad(t, t.status === "diluluskan")).join("")}</div>`}`;
+    <div id="tg-cards">${tugasanSenaraiHTML(semuaTugasan)}</div>
+    <div id="tg-pager">${tugasanPagerHTML(semuaTugasan)}</div>`;
 }
 
-function setTugasanFilter(f){ tugasanFilter = f; render(); }
+function segarTugasanSenarai(){
+  const me = currentUser.driverId;
+  const semuaTugasan = bookings.filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"));
+  $("tg-cards").innerHTML = tugasanSenaraiHTML(semuaTugasan);
+  $("tg-pager").innerHTML = tugasanPagerHTML(semuaTugasan);
+}
+
+function onTugasanCari(v){ tugasanCari = v; tugasanPage = 1; segarTugasanSenarai(); }
+function gerakTugasanPage(d){ tugasanPage += d; segarTugasanSenarai(); }
+function setTugasanFilter(f){ tugasanFilter = f; tugasanPage = 1; render(); }
 
 async function tukarStatusSaya(){
   const d = drv(currentUser.driverId);
