@@ -1,9 +1,19 @@
 /* SisKEN — tempahan.js (edit di sini) */
 /* ---------- TEMPAHAN ---------- */
 function renderTempahan(){
-  const senarai = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  const semuaSaya = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  const kiraan = {
+    semua: semuaSaya.length,
+    menunggu: semuaSaya.filter(b => b.status === "menunggu").length,
+    diluluskan: semuaSaya.filter(b => b.status === "diluluskan").length,
+    selesai: semuaSaya.filter(b => b.status === "selesai").length,
+    ditolak: semuaSaya.filter(b => b.status === "ditolak").length,
+  };
+  const senarai = terbaruDahulu(semuaSaya.filter(b => tempahanFilter === "semua" || b.status === tempahanFilter));
+  const penapis = (key, label) => `<button class="btn ${tempahanFilter===key?'btn-amber':'btn-dark'}" style="padding:6px 12px;font-size:13px" onclick="setTempahanFilter('${key}')">${label}${kiraan[key] ? ` (${kiraan[key]})` : ""}</button>`;
+
   const cards = senarai.length === 0
-    ? `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.</div>`
+    ? `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">${semuaSaya.length === 0 ? 'Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.' : "Tiada tempahan untuk penapis ini."}</div>`
     : senarai.map(b => {
     const v = veh(b.vehicleId), d = drv(b.driverId);
     return `<div class="bk">
@@ -30,8 +40,13 @@ function renderTempahan(){
       <h2 class="sect">${isAdmin() ? "Senarai Tempahan" : "Tempahan Saya"}</h2>
       <button class="btn btn-amber" onclick="openForm()">＋ Tempahan Baharu</button>
     </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      ${penapis("semua","Semua")}${penapis("menunggu","Menunggu")}${penapis("diluluskan","Diluluskan")}${penapis("selesai","Selesai")}${penapis("ditolak","Ditolak")}
+    </div>
     <div style="display:grid;gap:14px">${cards}</div>`;
 }
+
+function setTempahanFilter(f){ tempahanFilter = f; render(); }
 async function complete(id){
   const b = bookings.find(b => b.id === id);
   /* Mod demo / tiada API */

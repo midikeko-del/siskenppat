@@ -6,11 +6,18 @@ function renderTugasan(){
       Akaun anda belum dipautkan kepada mana-mana rekod pemandu.<br>Sila hubungi admin untuk memautkan akaun ini kepada rekod pemandu anda.
     </div></div>`;
 
-  const semua = bookings
-    .filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"))
-    .sort((a,b) => (a.tarikh + a.masaMula).localeCompare(b.tarikh + b.masaMula));
-  const aktif = semua.filter(b => b.status === "diluluskan");
-  const sejarah = semua.filter(b => b.status === "selesai").reverse().slice(0, 10);
+  const semuaTugasan = bookings.filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"));
+  const kiraan = {
+    aktif: semuaTugasan.filter(b => b.status === "diluluskan").length,
+    selesai: semuaTugasan.filter(b => b.status === "selesai").length,
+    semua: semuaTugasan.length,
+  };
+  const senarai = terbaruDahulu(semuaTugasan.filter(b => {
+    if(tugasanFilter === "semua") return true;
+    if(tugasanFilter === "aktif") return b.status === "diluluskan";
+    return b.status === "selesai";
+  }));
+  const penapis = (key, label) => `<button class="btn ${tugasanFilter===key?'btn-amber':'btn-dark'}" style="padding:6px 12px;font-size:13px" onclick="setTugasanFilter('${key}')">${label}${kiraan[key] ? ` (${kiraan[key]})` : ""}</button>`;
 
   const kad = (t, butang) => {
     const v = veh(t.vehicleId);
@@ -45,12 +52,15 @@ function renderTugasan(){
   return `
     <h2 class="sect">Tugasan Saya — ${esc(saya ? saya.nama : currentUser.nama)}</h2>
     ${statusPanel}
-    ${aktif.length === 0
-      ? `<div class="card" style="padding:32px;text-align:center;color:var(--slate-l)">Tiada tugasan aktif buat masa ini. 👍</div>`
-      : `<div style="display:grid;gap:14px">${aktif.map(t => kad(t, true)).join("")}</div>`}
-    ${sejarah.length ? `<h2 class="sect" style="margin-top:8px">Sejarah Selesai (10 terkini)</h2>
-      <div style="display:grid;gap:14px">${sejarah.map(t => kad(t, false)).join("")}</div>` : ""}`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0">
+      ${penapis("aktif","Aktif")}${penapis("selesai","Selesai")}${penapis("semua","Semua")}
+    </div>
+    ${senarai.length === 0
+      ? `<div class="card" style="padding:32px;text-align:center;color:var(--slate-l)">${tugasanFilter === "aktif" ? "Tiada tugasan aktif buat masa ini. 👍" : "Tiada rekod untuk penapis ini."}</div>`
+      : `<div style="display:grid;gap:14px">${senarai.map(t => kad(t, t.status === "diluluskan")).join("")}</div>`}`;
 }
+
+function setTugasanFilter(f){ tugasanFilter = f; render(); }
 
 async function tukarStatusSaya(){
   const d = drv(currentUser.driverId);

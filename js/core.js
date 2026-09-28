@@ -83,6 +83,8 @@ let nextDrv = 5;
 let nextSel = 6;
 let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
 let selFilter = "semua";
+let tempahanFilter = "semua";  // penapis menu Tempahan (admin & pemohon): semua|menunggu|diluluskan|selesai|ditolak
+let tugasanFilter = "aktif";   // penapis menu Tugasan Saya (pemandu): aktif|selesai|semua
 let tab = "dashboard";
 let editVehId = null; // id kenderaan yang sedang diedit (null = tambah baharu)
 let mingguOffset = 0;     // offset minggu jadual pemandu (admin) — 0 = minggu ini
@@ -124,6 +126,10 @@ const paparTarikh = (b) => (b.tarikhTamat && b.tarikhTamat !== b.tarikh)
   : fmtTarikh(b.tarikh);
 const veh = (id) => vehicles.find(v => v.id === id);
 const drv = (id) => drivers.find(d => d.id === id);
+/* Nombor tempahan daripada ID (cth "T-1055" -> 1055) — untuk susun terbaru dahulu */
+const noTempahan = (b) => { const m = /^T-(\d+)$/.exec(String(b.id)); return m ? Number(m[1]) : 0; };
+/* Susun senarai tempahan supaya tempahan TERBARU (ID tertinggi) berada paling atas */
+const terbaruDahulu = (arr) => [...arr].sort((a, b) => noTempahan(b) - noTempahan(a));
 /* Senarai AKTIF (sembunyikan rekod yang diarkib) — veh()/drv() kekal cari semua untuk sejarah */
 const kenderaanAktif = () => vehicles.filter(v => v.status !== "dipadam");
 const pemanduAktif   = () => drivers.filter(d => d.status !== "dipadam");
