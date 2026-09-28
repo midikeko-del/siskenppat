@@ -6,8 +6,8 @@ function renderPengguna(){
   if(!apiAktif() || !TOKEN){
     return `<h2 class="sect">Pengurusan Pengguna</h2>
       <div class="card"><div style="padding:30px;color:var(--slate);font-size:14px;line-height:1.7">
-        Modul ini memerlukan sambungan Google Sheets dan log masuk sebenar.<br>
-        Tetapkan <b>API_URL</b> di bahagian atas fail ini, deploy Code.gs, kemudian log masuk dengan akaun admin untuk menambah dan mengurus pengguna.
+        Modul ini memerlukan sambungan backend (php/api.php) dan log masuk sebenar.<br>
+        Tetapkan <b>API_URL</b> di bahagian atas <code>js/core.js</code>, pasang backend PHP (lihat README.md), kemudian log masuk dengan akaun admin untuk menambah dan mengurus pengguna.
       </div></div>`;
   }
   const rows = users.map(u => `<tr>

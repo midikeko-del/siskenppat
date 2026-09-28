@@ -2,9 +2,9 @@
    SisKEN — Service Worker (PWA)
    Strategi: network-first untuk fail app (sentiasa dapat versi
    terkini bila online), fallback ke cache bila luar talian.
-   Permintaan ke API Apps Script TIDAK di-cache.
+   Permintaan ke API backend (php/api.php) TIDAK di-cache.
    ============================================================ */
-const CACHE = "sisken-v9"; // naikkan nombor (v2, v3...) bila kemas kini app
+const CACHE = "sisken-v10"; // naikkan nombor (v2, v3...) bila kemas kini app
 
 const ASET = [
   "./",

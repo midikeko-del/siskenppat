@@ -1,13 +1,14 @@
 /* SisKEN — core.js (edit di sini) */
 /* ============================================================
-   SAMBUNGAN GOOGLE SHEETS (Apps Script)
-   1. Deploy Code.gs sebagai Web App
-   2. Salin URL Web App (berakhir dengan /exec)
-   3. Tampal di bawah, gantikan teks GANTIKAN_URL_DI_SINI
-   Jika dibiarkan, app berjalan dalam mod tempatan (data
-   contoh, tidak disimpan).
+   SAMBUNGAN BACKEND — PHP + MySQL (php/api.php)
+   Backend kini dihoskan bersama frontend (satu server, satu asal
+   [same-origin]), jadi laluan relatif "php/api.php" sudah cukup.
+   Kalau backend dihoskan di domain/port lain, tukar kepada URL
+   penuh (cth: "https://sisken.ppat.gov.my/php/api.php").
+   Jika dibiarkan kosong, app berjalan dalam mod tempatan (data
+   contoh, tidak disimpan). Lihat README.md bahagian "Backend PHP".
    ============================================================ */
-const API_URL = "https://script.google.com/macros/s/AKfycbzIv8zPV-KGmKJCTc345abS62abIGstMgYcDhvOVvvc6k03h3165g0GZzITa5iA0sHaeg/exec";
+const API_URL = "php/api.php";
 
 /* ================= DATA ================= */
 /* ===== Tarikh & masa sebenar — zon Asia/Kuala_Lumpur (GMT+8) ===== */
@@ -316,7 +317,7 @@ function renderLogin(){
         <button class="btn btn-amber" id="lg-ok" style="justify-content:center;width:100%" onclick="doLogin()">Log Masuk</button>
         <button class="btn" style="justify-content:center;width:100%;color:var(--slate)" onclick="$('login-root').innerHTML=''">‹ Kembali ke paparan umum</button>
       ` : `
-        <div class="login-note">⚠️ Sambungan Google Sheets belum ditetapkan (API_URL), jadi log masuk sebenar belum aktif. Anda boleh masuk dalam <b>mod demo</b> dengan data contoh — data tidak akan disimpan.</div>
+        <div class="login-note">⚠️ Sambungan backend belum ditetapkan (API_URL), jadi log masuk sebenar belum aktif. Anda boleh masuk dalam <b>mod demo</b> dengan data contoh — data tidak akan disimpan.</div>
         <button class="btn btn-amber" style="justify-content:center;width:100%" onclick="demoLogin()">Masuk Mod Demo (Admin)</button>
         <button class="btn" style="justify-content:center;width:100%;color:var(--slate)" onclick="$('login-root').innerHTML=''">‹ Kembali ke paparan umum</button>
       `}
@@ -346,7 +347,7 @@ async function doLogin(){
     masukApp();
     setSync("ok");
   }catch(e){
-    $("lg-err").innerHTML = '<span class="err">Tidak dapat menghubungi pelayan. Semak API_URL dan sambungan internet.</span>';
+    $("lg-err").innerHTML = '<span class="err">Tidak dapat menghubungi pelayan. Semak API_URL dan sambungan rangkaian.</span>';
     btn.disabled = false; btn.textContent = "Log Masuk";
   }
 }
