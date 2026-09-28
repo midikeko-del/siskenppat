@@ -232,7 +232,7 @@ function render(){
 /* ============================================================
    SAMBUNGAN API (Apps Script) + LOG MASUK
    ============================================================ */
-const apiAktif = () => API_URL.startsWith("http");
+const apiAktif = () => !!API_URL; // API_URL relatif ("php/api.php") ATAU URL penuh — kosongkan untuk mod tempatan
 let TOKEN = null;
 let currentUser = null;
 let users = [];
