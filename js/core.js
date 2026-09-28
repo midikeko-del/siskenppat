@@ -84,7 +84,12 @@ let nextSel = 6;
 let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
 let selFilter = "semua";
 let tempahanFilter = "semua";  // penapis menu Tempahan (admin & pemohon): semua|menunggu|diluluskan|selesai|ditolak
+let tempahanCari = "";         // teks carian menu Tempahan
+let tempahanPage = 1;          // muka surat semasa menu Tempahan
 let tugasanFilter = "aktif";   // penapis menu Tugasan Saya (pemandu): aktif|selesai|semua
+let tugasanCari = "";          // teks carian menu Tugasan Saya
+let tugasanPage = 1;           // muka surat semasa menu Tugasan Saya
+const SAIZ_HALAMAN = 20;       // bilangan rekod setiap muka surat (pagination)
 let tab = "dashboard";
 let editVehId = null; // id kenderaan yang sedang diedit (null = tambah baharu)
 let mingguOffset = 0;     // offset minggu jadual pemandu (admin) — 0 = minggu ini
