@@ -44,8 +44,9 @@ function renderPemandu(){
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <h2 class="sect">Jadual Pemandu</h2>
-      <button class="btn btn-amber" onclick="openDrvForm()">＋ Tambah Pemandu</button>
+      <button class="btn btn-dark" onclick="tab='pengguna';render()">👥 Tambah Pemandu Baharu (melalui Pengguna)</button>
     </div>
+    <p class="muted" style="font-size:13px;margin:-4px 0 4px">Pemandu baharu mesti ditambah sebagai akaun Pengguna (peranan: Pemandu) — rekod pemandu dicipta serentak dengan akaun log masuknya. Di sini anda hanya boleh mengedit atau mengarkibkan rekod sedia ada.</p>
     <div class="card">
       <div class="card-h">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -73,27 +74,28 @@ function toggleDriver(id){
 /* ============================================================
    TAMBAH / EDIT / PADAM PEMANDU
    ============================================================ */
+/* Edit rekod pemandu SEDIA ADA sahaja — rekod baharu hanya dicipta melalui
+   tab Pengguna (bersama akaun log masuk pemandu tersebut). */
 function openDrvForm(id){
-  const d = id ? drv(id) : null;
+  const d = drv(id);
+  if(!d) return;
   $("modal-root").innerHTML = `
   <div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
-      <div class="modal-h"><h3>${d ? "Edit Pemandu" : "Tambah Pemandu Baharu"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-h"><h3>Edit Pemandu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
-        <label class="fld"><span>Nama Penuh</span><input id="d-nama" value="${d?esc(d.nama):""}" placeholder="cth: En. Ahmad bin Ali" oninput="checkDrvForm()"></label>
+        <label class="fld"><span>Nama Penuh</span><input id="d-nama" value="${esc(d.nama)}" placeholder="cth: En. Ahmad bin Ali" oninput="checkDrvForm()"></label>
         <div class="row2">
-          <label class="fld"><span>No. Telefon</span><input id="d-tel" value="${d?esc(d.telefon):""}" placeholder="cth: 012-345 6789" oninput="checkDrvForm()"></label>
-          <label class="fld"><span>Kelas Lesen</span><input id="d-lesen" value="${d?esc(d.lesen):""}" placeholder="cth: D, E, GDL" oninput="checkDrvForm()"></label>
+          <label class="fld"><span>No. Telefon</span><input id="d-tel" value="${esc(d.telefon)}" placeholder="cth: 012-345 6789" oninput="checkDrvForm()"></label>
+          <label class="fld"><span>Kelas Lesen</span><input id="d-lesen" value="${esc(d.lesen)}" placeholder="cth: D, E, GDL" oninput="checkDrvForm()"></label>
         </div>
         <label class="fld"><span>Status</span>
           <select id="d-status">
-            <option value="bertugas" ${!d||d.status==="bertugas"?"selected":""}>Bertugas</option>
-            <option value="cuti" ${d&&d.status==="cuti"?"selected":""}>Cuti</option>
+            <option value="bertugas" ${d.status==="bertugas"?"selected":""}>Bertugas</option>
+            <option value="cuti" ${d.status==="cuti"?"selected":""}>Cuti</option>
           </select>
         </label>
-        <button class="btn btn-amber" id="d-ok" style="justify-content:center" onclick="submitDrv(${d?`'${d.id}'`:"null"})">
-          ${d ? "Simpan Perubahan" : "Tambah Pemandu"}
-        </button>
+        <button class="btn btn-amber" id="d-ok" style="justify-content:center" onclick="submitDrv('${d.id}')">Simpan Perubahan</button>
       </div>
     </div>
   </div>`;
@@ -111,13 +113,8 @@ function submitDrv(id){
     lesen: $("d-lesen").value.trim(),
     status: $("d-status").value,
   };
-  if(id){
-    Object.assign(drv(id), data);
-    notify(`Maklumat pemandu dikemas kini.`);
-  } else {
-    drivers.push({ id: `P${nextDrv++}`, ...data });
-    notify(`Pemandu ${data.nama} ditambah.`);
-  }
+  Object.assign(drv(id), data);
+  notify(`Maklumat pemandu dikemas kini.`);
   closeModal(); sync();
 }
 

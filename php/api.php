@@ -539,18 +539,42 @@ function senaraiUsers_(): array {
     );
 }
 
+/* ---------- Jana ID rekod pemandu baharu (cth "P5") ---------- */
+function nextDriverId_(): string {
+    $max = 0;
+    $ids = db()->query("SELECT id FROM pemandu")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($ids as $id) {
+        if (preg_match('/^P(\d+)$/', (string) $id, $m) && (int) $m[1] > $max) $max = (int) $m[1];
+    }
+    return "P" . ($max + 1);
+}
+
 function userAdd_(array $d): array {
     $userId = trim((string) ($d["userId"] ?? ""));
     if (!$userId || empty($d["nama"]) || empty($d["password"])) return ["ok" => false, "ralat" => "Maklumat tidak lengkap."];
     $stmt = db()->prepare("SELECT userId FROM pengguna WHERE LOWER(userId) = LOWER(:u)");
     $stmt->execute([":u" => $userId]);
     if ($stmt->fetch()) return ["ok" => false, "ralat" => "ID pengguna ini sudah wujud."];
-    $salt = saltBaru_();
     $peranan = in_array($d["peranan"] ?? "", ["admin", "pemandu"], true) ? $d["peranan"] : "pemohon";
-    $driverId = $peranan === "pemandu" ? (string) ($d["driverId"] ?? "") : "";
+    $nama = trim((string) $d["nama"]);
+
+    /* Akaun peranan pemandu — rekod pemandu dicipta SERENTAK di sini.
+       Tiada lagi laluan untuk cipta rekod pemandu berasingan (tab Jadual Pemandu
+       hanya boleh edit/arkib rekod sedia ada). */
+    $driverId = null;
+    if ($peranan === "pemandu") {
+        $telefon = trim((string) ($d["telefon"] ?? ""));
+        $lesen = trim((string) ($d["lesen"] ?? ""));
+        if (!$telefon || !$lesen) return ["ok" => false, "ralat" => "Sila lengkapkan no. telefon dan kelas lesen pemandu."];
+        $driverId = nextDriverId_();
+        db()->prepare("INSERT INTO pemandu (id, nama, telefon, lesen, status) VALUES (:id,:n,:t,:l,'bertugas')")
+            ->execute([":id" => $driverId, ":n" => $nama, ":t" => $telefon, ":l" => $lesen]);
+    }
+
+    $salt = saltBaru_();
     db()->prepare("INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId) VALUES (:u,:n,:p,:h,:s,:d)")
-        ->execute([":u" => $userId, ":n" => trim((string) $d["nama"]), ":p" => $peranan, ":h" => hash_($salt, (string) $d["password"]), ":s" => $salt, ":d" => $driverId ?: null]);
-    return ["ok" => true, "users" => senaraiUsers_()];
+        ->execute([":u" => $userId, ":n" => $nama, ":p" => $peranan, ":h" => hash_($salt, (string) $d["password"]), ":s" => $salt, ":d" => $driverId]);
+    return ["ok" => true, "users" => senaraiUsers_(), "drivers" => readPemandu()];
 }
 
 function userReset_(array $d): array {

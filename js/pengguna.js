@@ -45,7 +45,7 @@ function openUserForm(){
         <div class="row2">
           <label class="fld"><span>ID Pengguna</span><input id="u-id" placeholder="cth: staf01" oninput="checkUserForm()"></label>
           <label class="fld"><span>Peranan</span>
-            <select id="u-role" onchange="$('u-drv-wrap').style.display = this.value==='pemandu' ? 'block' : 'none'">
+            <select id="u-role" onchange="$('u-drv-wrap').style.display = this.value==='pemandu' ? 'block' : 'none'; checkUserForm()">
               <option value="pemohon">Pemohon</option>
               <option value="pemandu">Pemandu</option>
               <option value="admin">Admin</option>
@@ -53,9 +53,13 @@ function openUserForm(){
           </label>
         </div>
         <label class="fld"><span>Nama Penuh</span><input id="u-nm" placeholder="cth: En. Hafiz Rahman" oninput="checkUserForm()"></label>
-        <label class="fld" id="u-drv-wrap" style="display:none"><span>Pautkan kepada Rekod Pemandu</span>
-          <select id="u-drv">${pemanduAktif().map(d => `<option value="${d.id}">${esc(d.nama)}</option>`).join("")}</select>
-        </label>
+        <div id="u-drv-wrap" style="display:none">
+          <div class="row2">
+            <label class="fld"><span>No. Telefon</span><input id="u-drv-tel" placeholder="cth: 012-345 6789" oninput="checkUserForm()"></label>
+            <label class="fld"><span>Kelas Lesen</span><input id="u-drv-lesen" placeholder="cth: D, E, GDL" oninput="checkUserForm()"></label>
+          </div>
+          <p class="muted" style="font-size:12px;margin:-6px 0 12px">Rekod pemandu akan dicipta serentak dengan akaun ini — tiada laluan berasingan untuk menambah pemandu.</p>
+        </div>
         <div class="row2">
           <label class="fld"><span>Kata Laluan</span><input id="u-pw" type="password" oninput="checkUserForm()"></label>
           <label class="fld"><span>Ulang Kata Laluan</span><input id="u-pw2" type="password" oninput="checkUserForm()"></label>
@@ -70,21 +74,25 @@ function openUserForm(){
 
 function checkUserForm(){
   const pw = $("u-pw").value, pw2 = $("u-pw2").value;
+  const isPemandu = $("u-role").value === "pemandu";
+  const drvOK = !isPemandu || ($("u-drv-tel").value.trim() && $("u-drv-lesen").value.trim());
   let err = "";
   if(pw && pw.length < 6) err = "Kata laluan mestilah sekurang-kurangnya 6 aksara.";
   else if(pw && pw2 && pw !== pw2) err = "Kata laluan tidak sepadan.";
   $("u-err").innerHTML = err ? `<span class="err">${err}</span>` : "";
-  $("u-ok").disabled = !($("u-id").value.trim() && $("u-nm").value.trim() && pw.length >= 6 && pw === pw2);
+  $("u-ok").disabled = !($("u-id").value.trim() && $("u-nm").value.trim() && pw.length >= 6 && pw === pw2 && drvOK);
 }
 
 async function submitUser(){
   const btn = $("u-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  const isPemandu = $("u-role").value === "pemandu";
   try{
     const res = await api("userAdd", {
       userId: $("u-id").value.trim(),
       nama: $("u-nm").value.trim(),
       peranan: $("u-role").value,
-      driverId: $("u-role").value === "pemandu" ? $("u-drv").value : null,
+      telefon: isPemandu ? $("u-drv-tel").value.trim() : undefined,
+      lesen: isPemandu ? $("u-drv-lesen").value.trim() : undefined,
       password: $("u-pw").value,
     });
     if(res.sesiTamat){ sesiTamat(); return; }
@@ -93,7 +101,8 @@ async function submitUser(){
       btn.disabled = false; btn.textContent = "Tambah Pengguna"; return;
     }
     users = res.users;
-    closeModal(); render(); notify("Pengguna ditambah.");
+    if(res.drivers) drivers = res.drivers;
+    closeModal(); render(); notify("Pengguna ditambah." + (isPemandu ? " Rekod pemandu turut dicipta." : ""));
   }catch(e){
     $("u-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
     btn.disabled = false; btn.textContent = "Tambah Pengguna";
