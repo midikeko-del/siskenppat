@@ -2,6 +2,13 @@
 /* ============================================================
    PAPARAN UMUM (sebelum log masuk)
    ============================================================ */
+/* Pelayan tidak dapat dihubungi — jangan paparkan data lama (cth. data penuh sesi admin
+   selepas log keluar) atau data contoh; tunjuk paparan kosong + status "Gagal sambung". */
+function kosongkanData(){
+  bookings = []; drivers = []; vehicles = []; maintenance = [];
+  setSync("err");
+}
+
 async function mulaApp(){
   if(apiAktif()){
     setSync("loading");
@@ -11,9 +18,10 @@ async function mulaApp(){
         bookings = res.data.bookings || [];
         drivers = res.data.drivers || [];
         vehicles = res.data.vehicles || [];
+        maintenance = [];
         setSync("ok");
-      } else setSync("err");
-    }catch(e){ setSync("err"); }
+      } else kosongkanData();
+    }catch(e){ kosongkanData(); }
   } else setSync("local");
   render();
 }

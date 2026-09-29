@@ -244,6 +244,10 @@ function render(){
    SAMBUNGAN API (backend PHP) + LOG MASUK
    ============================================================ */
 const apiAktif = () => !!API_URL; // API_URL relatif ("php/api.php") ATAU URL penuh — kosongkan untuk mod tempatan
+/* Data contoh di atas HANYA untuk mod tempatan/demo. Bila backend aktif, mula dengan
+   senarai kosong — supaya data rekaan tidak pernah dipaparkan jika pelayan tidak dapat
+   dihubungi (luar talian / XAMPP mati). */
+if(apiAktif()){ vehicles = []; drivers = []; bookings = []; maintenance = []; }
 let TOKEN = null;
 let currentUser = null;
 let users = [];
