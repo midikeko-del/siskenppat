@@ -45,8 +45,9 @@ function renderKenderaan(){
 }
 
 /* ================= TINDAKAN ================= */
+/* Kemas kini SATU medan sahaja (lokasi/status) — medan lain di server tidak disentuh */
 function updVehicle(id, key, val){
-  const v = veh(id); v[key] = val; sync();
+  simpanRekod("vehicleSave", { vehicle: { id, [key]: val } }, () => { veh(id)[key] = val; });
 }
 
 /* ============================================================
@@ -109,7 +110,7 @@ function checkVehForm(){
   $("v-ok").disabled = !valid;
 }
 
-function submitVeh(id){
+async function submitVeh(id){
   const data = {
     plat: $("v-plat").value.trim().toUpperCase(),
     model: $("v-model").value.trim(),
@@ -121,14 +122,11 @@ function submitVeh(id){
     status: $("v-status").value,
     lokasi: $("v-lokasi").value.trim() || "Garaj Utama",
   };
-  if(id){
-    Object.assign(veh(id), data);
-    notify(`Kenderaan ${data.plat} dikemas kini.`);
-  } else {
-    vehicles.push({ id: `K${nextVeh++}`, ...data });
-    notify(`Kenderaan ${data.plat} ditambah ke senarai kenderaan.`);
-  }
-  closeModal(); sync();
+  const btn = $("v-ok"); btn.disabled = true;
+  const ok = await simpanRekod("vehicleSave", { vehicle: id ? { id, ...data } : data },
+    () => { if(id) Object.assign(veh(id), data); else vehicles.push({ id: `K${nextVeh++}`, ...data }); },
+    id ? `Kenderaan ${data.plat} dikemas kini.` : `Kenderaan ${data.plat} ditambah ke senarai kenderaan.`);
+  if(ok) closeModal(); else btn.disabled = false;
 }
 
 function askDelVehicle(id){
@@ -143,7 +141,9 @@ function askDelVehicle(id){
   confirmModal("Arkibkan Kenderaan",
     `Anda pasti mahu mengarkibkan <b>${esc(v.plat)} — ${esc(v.model)}</b>? Ia akan disembunyikan daripada senarai kenderaan, tetapi rekod sejarah & laporan kekal utuh.`,
     () => {
-      veh(id).status = "dipadam";       // soft-delete — kekalkan rujukan sejarah
-      closeModal(); sync(); notify(`Kenderaan ${v.plat} diarkibkan.`);
+      closeModal();
+      // soft-delete — kekalkan rujukan sejarah; server semak semula tempahan aktif
+      simpanRekod("vehicleSave", { vehicle: { id, status: "dipadam" } },
+        () => { veh(id).status = "dipadam"; }, `Kenderaan ${v.plat} diarkibkan.`);
     }, "🗑 Ya, Arkibkan", "btn-red");
 }

@@ -68,7 +68,8 @@ function renderPemandu(){
     </div>`;
 }
 function toggleDriver(id){
-  const d = drv(id); d.status = d.status === "bertugas" ? "cuti" : "bertugas"; sync();
+  const baru = drv(id).status === "bertugas" ? "cuti" : "bertugas";
+  simpanRekod("driverSave", { driver: { id, status: baru } }, () => { drv(id).status = baru; });
 }
 
 /* ============================================================
@@ -106,16 +107,17 @@ function checkDrvForm(){
   $("d-ok").disabled = !($("d-nama").value.trim() && $("d-tel").value.trim() && $("d-lesen").value.trim());
 }
 
-function submitDrv(id){
+async function submitDrv(id){
   const data = {
     nama: $("d-nama").value.trim(),
     telefon: $("d-tel").value.trim(),
     lesen: $("d-lesen").value.trim(),
     status: $("d-status").value,
   };
-  Object.assign(drv(id), data);
-  notify(`Maklumat pemandu dikemas kini.`);
-  closeModal(); sync();
+  const btn = $("d-ok"); btn.disabled = true;
+  const ok = await simpanRekod("driverSave", { driver: { id, ...data } },
+    () => { Object.assign(drv(id), data); }, "Maklumat pemandu dikemas kini.");
+  if(ok) closeModal(); else btn.disabled = false;
 }
 
 function askDelDriver(id){
@@ -130,7 +132,9 @@ function askDelDriver(id){
   confirmModal("Arkibkan Pemandu",
     `Anda pasti mahu mengarkibkan <b>${esc(d.nama)}</b>? Ia akan disembunyikan daripada senarai pemandu, tetapi rekod sejarah & laporan kekal utuh.`,
     () => {
-      drv(id).status = "dipadam";       // soft-delete — kekalkan rujukan sejarah
-      closeModal(); sync(); notify(`Pemandu ${d.nama} diarkibkan.`);
+      closeModal();
+      // soft-delete — kekalkan rujukan sejarah; server semak semula tugasan aktif
+      simpanRekod("driverSave", { driver: { id, status: "dipadam" } },
+        () => { drv(id).status = "dipadam"; }, `Pemandu ${d.nama} diarkibkan.`);
     }, "🗑 Ya, Arkibkan", "btn-red");
 }

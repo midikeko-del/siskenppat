@@ -271,10 +271,6 @@ function setSync(mode){
   el.textContent = cfg[1];
 }
 
-function dataKosong(d){
-  return ["vehicles","drivers","bookings","maintenance"].every(k => !d[k] || d[k].length === 0);
-}
-
 function pakaiData(d){
   vehicles = d.vehicles || [];
   drivers = d.drivers || [];
@@ -289,27 +285,47 @@ function pakaiData(d){
   }
 }
 
-/* Simpan automatik (debounce 600ms supaya tidak membanjiri API) */
-let _saveTm = null;
-function sync(){
-  render();
-  if(!apiAktif() || !TOKEN){ setSync("local"); return; }
+/* Simpan SATU rekod melalui tindakan API khusus (vehicleSave/driverSave/maintSave/maintDel).
+   Server hanya mengubah rekod tersebut dan memulangkan data terkini — tiada lagi
+   tulis-ganti seluruh jadual daripada salinan pelayar (yang boleh memadam tempahan
+   pengguna lain). Mod tempatan/demo: jalankan ubahTempatan() sahaja.
+   Pulang true jika berjaya. */
+async function simpanRekod(action, payload, ubahTempatan, mesejOK){
+  if(!apiAktif() || !TOKEN){
+    ubahTempatan(); setSync("local"); render();
+    if(mesejOK) notify(mesejOK);
+    return true;
+  }
   setSync("saving");
-  clearTimeout(_saveTm);
-  _saveTm = setTimeout(saveNow, 600);
+  try{
+    const res = await api(action, payload);
+    if(res.sesiTamat){ sesiTamat(); return false; }
+    if(res.data) pakaiData(res.data);
+    setSync("ok"); render();
+    if(!res.ok){ notify(res.ralat || "Gagal menyimpan.", "err"); return false; }
+    if(mesejOK) notify(mesejOK);
+    return true;
+  }catch(e){
+    setSync("err"); render(); // render semula — pulihkan kawalan (cth. select) kepada nilai tersimpan
+    notify("Gagal menghubungi pelayan — perubahan tidak disimpan.", "err");
+    return false;
+  }
 }
 
-async function saveNow(){
-  if(!apiAktif() || !TOKEN) return;
+/* Muat semula data dari server (cth. bila pengguna kembali ke tab app) supaya
+   tempahan/kemas kini pengguna lain kelihatan tanpa perlu log masuk semula. */
+let _segarBerjalan = false;
+async function segarData(){
+  if(!apiAktif() || !TOKEN || _segarBerjalan) return;
+  _segarBerjalan = true;
   try{
-    const res = await api("save", { data: {
-      vehicles, drivers, bookings, maintenance,
-      counters: { nextNum, nextVeh, nextDrv, nextSel },
-    }});
+    const res = await api("load");
     if(res.sesiTamat){ sesiTamat(); return; }
-    setSync(res.ok ? "ok" : "err");
-  }catch(e){ setSync("err"); }
+    if(res.ok && res.data){ pakaiData(res.data); render(); }
+  }catch(e){ /* senyap — cuba lagi pada peluang seterusnya */ }
+  finally{ _segarBerjalan = false; }
 }
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") segarData(); });
 
 /* ============================================================
    SKRIN LOG MASUK
@@ -349,12 +365,8 @@ async function doLogin(){
     }
     TOKEN = res.token;
     currentUser = res.user;
-    if(res.data){
-      if(dataKosong(res.data) && currentUser.peranan === "admin"){
-        if(res.data.users) users = res.data.users;
-        saveNow(); // sheet masih kosong & admin — hantar data contoh sebagai permulaan
-      } else pakaiData(res.data);
-    }
+    // Guna data server walaupun kosong (pemasangan baharu) — JANGAN hantar data contoh ke pangkalan data sebenar
+    if(res.data) pakaiData(res.data);
     masukApp();
     setSync("ok");
   }catch(e){

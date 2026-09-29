@@ -35,6 +35,8 @@ function tempahanSenaraiHTML(semuaSaya){
   if(senarai.length === 0){
     return `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">${semuaSaya.length === 0 ? 'Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.' : "Tiada tempahan sepadan."}</div>`;
   }
+  // Hadkan muka surat SEBELUM potong senarai (senarai boleh mengecil selepas lulus/tolak/selesai)
+  tempahanPage = Math.min(Math.max(1, tempahanPage), Math.ceil(senarai.length / SAIZ_HALAMAN));
   const mula = (tempahanPage - 1) * SAIZ_HALAMAN;
   const papar = senarai.slice(mula, mula + SAIZ_HALAMAN);
   return `<div style="display:grid;gap:14px">${papar.map(kadTempahan).join("")}</div>`;

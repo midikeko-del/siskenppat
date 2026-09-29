@@ -22,18 +22,24 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ]);
 
-    // 2) Jalankan schema.sql (termasuk CREATE DATABASE + semua CREATE TABLE)
+    // 2) Cipta pangkalan data ikut DB_NAME dalam config.php (bukan nama tetap dalam schema.sql)
+    $namaDb = "`" . str_replace("`", "``", DB_NAME) . "`";
+    $root->exec("CREATE DATABASE IF NOT EXISTS $namaDb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $root->exec("USE $namaDb");
+
+    // 3) Jalankan CREATE TABLE dalam schema.sql (abaikan CREATE DATABASE / USE di dalamnya)
     $sql = file_get_contents(__DIR__ . "/schema.sql");
     if ($sql === false) {
         throw new RuntimeException("Tidak jumpa schema.sql di folder yang sama.");
     }
+    $sql = preg_replace('/^\s*--.*$/m', "", $sql); // buang baris komen
     foreach (array_filter(array_map("trim", explode(";", $sql))) as $stmt) {
-        if ($stmt === "") continue;
+        if (preg_match('/^(CREATE\s+DATABASE|USE)\b/i', $stmt)) continue;
         $root->exec($stmt);
     }
     echo "✔ Pangkalan data & jadual sedia.\n";
 
-    // 3) Cipta akaun admin pertama jika jadual Pengguna masih kosong
+    // 4) Cipta akaun admin pertama jika jadual Pengguna masih kosong
     $pdo = db();
     $count = (int) $pdo->query("SELECT COUNT(*) FROM pengguna")->fetchColumn();
     if ($count === 0) {

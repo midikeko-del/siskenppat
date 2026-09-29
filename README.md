@@ -123,7 +123,7 @@ cp php/*.php public/php/          # jika deploy backend PHP sekali
 - Jadual MySQL (`php/schema.sql`): Kenderaan, Pemandu, Tempahan, Selenggaraan, Pengguna, Sesi, Tetapan, Keselamatan, Log — nama sama seperti helaian Google Sheets asal (huruf kecil untuk nama jadual).
 
 ## 8. Apa yang dah disiapkan (ikut commit)
-- **Migrasi backend**: Google Apps Script/Sheets → PHP + MySQL (PDO, prepared statements), port 1:1 setiap tindakan API (login, awam, load, save, bookingAdd/Approve/Reject/Complete/Edit, tukarPw, drvStatus, userAdd/Reset/Del, auditLog, logPurge, logout). Dikunci dengan `GET_LOCK` MySQL (setara `LockService` GAS) untuk elak race condition.
+- **Migrasi backend**: Google Apps Script/Sheets → PHP + MySQL (PDO, prepared statements), port setiap tindakan API (login, awam, load, vehicleSave, driverSave, maintSave, maintDel, bookingAdd/Approve/Reject/Complete/Edit, tukarPw, drvStatus, userAdd/Reset/Del, auditLog, logPurge, logout). Dikunci dengan `GET_LOCK` MySQL (setara `LockService` GAS) untuk elak race condition.
 - Keselamatan: kawalan peranan server (anti lulus-sendiri), tapis data bukan-admin, kunci brute-force (5 cubaan/15 min), hash bersalt (SHA-256+salt, sama algoritma seperti asal).
 - Integriti: kelulusan + semakan konflik di server, sekat tarikh/masa lampau, ID tempahan dijana server.
 - Ciri: status kenderaan auto, arkib (soft-delete) kenderaan/pemandu, pemandu kemas kini odometer/minyak/lokasi semasa selesai, log audit + padam >1 tahun.

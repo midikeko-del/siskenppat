@@ -14,14 +14,23 @@ function kadTugasan(t, butang){
     </div>`;
 }
 
+/* Susunan tugasan pemandu: yang AKTIF dahulu, ikut masa perjalanan terdekat (paling awal
+   di atas); yang SELESAI kemudian, terkini dahulu. Bukan ikut nombor tempahan — tempahan
+   yang dibuat lebih awal boleh jadi perjalanan yang lebih lewat. */
+function susunTugasan(a, b){
+  const aktifA = a.status === "diluluskan", aktifB = b.status === "diluluskan";
+  if(aktifA !== aktifB) return aktifA ? -1 : 1;
+  return aktifA ? mulaDT(a).localeCompare(mulaDT(b)) : mulaDT(b).localeCompare(mulaDT(a));
+}
+
 function tugasanTersenarai(semuaTugasan){
   const q = (tugasanCari || "").trim().toLowerCase();
-  return terbaruDahulu(semuaTugasan.filter(t => {
+  return semuaTugasan.filter(t => {
     if(tugasanFilter === "aktif" && t.status !== "diluluskan") return false;
     if(tugasanFilter === "selesai" && t.status !== "selesai") return false;
     if(!q) return true;
     return [t.id, t.pemohon, t.bahagian, t.tujuan, t.destinasi].some(x => String(x || "").toLowerCase().includes(q));
-  }));
+  }).sort(susunTugasan);
 }
 
 function tugasanSenaraiHTML(semuaTugasan){
@@ -29,6 +38,8 @@ function tugasanSenaraiHTML(semuaTugasan){
   if(senarai.length === 0){
     return `<div class="card" style="padding:32px;text-align:center;color:var(--slate-l)">${tugasanFilter === "aktif" && !tugasanCari ? "Tiada tugasan aktif buat masa ini. 👍" : "Tiada rekod sepadan."}</div>`;
   }
+  // Hadkan muka surat SEBELUM potong senarai (senarai mengecil selepas tugasan ditanda selesai)
+  tugasanPage = Math.min(Math.max(1, tugasanPage), Math.ceil(senarai.length / SAIZ_HALAMAN));
   const mula = (tugasanPage - 1) * SAIZ_HALAMAN;
   const papar = senarai.slice(mula, mula + SAIZ_HALAMAN);
   return `<div style="display:grid;gap:14px">${papar.map(t => kadTugasan(t, t.status === "diluluskan")).join("")}</div>`;

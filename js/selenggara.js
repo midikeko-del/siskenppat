@@ -95,7 +95,7 @@ function checkSelForm(){
   $("s-ok").disabled = !($("s-tarikh").value && $("s-butiran").value.trim() && $("s-bengkel").value.trim());
 }
 
-function submitSel(id){
+async function submitSel(id){
   const data = {
     vehicleId: $("s-veh").value,
     tarikh: $("s-tarikh").value,
@@ -106,14 +106,11 @@ function submitSel(id){
     odometer: parseInt($("s-odo").value) || 0,
     status: $("s-status").value,
   };
-  if(id){
-    Object.assign(maintenance.find(x => x.id === id), data);
-    notify("Rekod selenggaraan dikemas kini.");
-  } else {
-    maintenance.push({ id:`S${nextSel++}`, ...data });
-    notify("Rekod selenggaraan ditambah.");
-  }
-  closeModal(); sync();
+  const btn = $("s-ok"); btn.disabled = true;
+  const ok = await simpanRekod("maintSave", { rec: id ? { id, ...data } : data },
+    () => { if(id) Object.assign(maintenance.find(x => x.id === id), data); else maintenance.push({ id:`S${nextSel++}`, ...data }); },
+    id ? "Rekod selenggaraan dikemas kini." : "Rekod selenggaraan ditambah.");
+  if(ok) closeModal(); else btn.disabled = false;
 }
 
 function askDelSel(id){
@@ -122,7 +119,8 @@ function askDelSel(id){
   confirmModal("Padam Rekod Selenggaraan",
     `Anda pasti mahu memadam rekod <b>${esc(s.jenis)}</b> (${fmtTarikh(s.tarikh)})${v ? ` bagi <b>${esc(v.plat)}</b>` : ""}? Tindakan ini tidak boleh dibatalkan.`,
     () => {
-      maintenance = maintenance.filter(x => x.id !== id);
-      closeModal(); sync(); notify("Rekod selenggaraan dipadam.");
+      closeModal();
+      simpanRekod("maintDel", { id },
+        () => { maintenance = maintenance.filter(x => x.id !== id); }, "Rekod selenggaraan dipadam.");
     });
 }

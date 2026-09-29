@@ -10,6 +10,9 @@
  * ============================================================
  */
 
+// Jangan cetak amaran/ralat PHP ke dalam respons — ia merosakkan JSON & boleh dedahkan butiran pelayan
+ini_set("display_errors", "0");
+
 require_once __DIR__ . "/lib.php";
 
 header("Content-Type: application/json; charset=utf-8");
@@ -26,12 +29,10 @@ const SESI_JAM = 12;      // tempoh sah token log masuk (jam)
 const MAX_CUBAAN = 5;     // cubaan gagal sebelum dikunci
 const KUNCI_MINIT = 15;   // tempoh kunci (minit)
 
-const MAP = [
-    "kenderaan"    => "vehicles",
-    "pemandu"      => "drivers",
-    "tempahan"     => "bookings",
-    "selenggaraan" => "maintenance",
-];
+/* Lengah balasan selepas kata laluan salah (perlahankan brute-force) — dilakukan
+   SELEPAS kunci API dilepaskan supaya tidak menyekat permintaan pengguna lain. */
+$LENGAH_GAGAL = false;
+function tandaLengah_(): void { $GLOBALS["LENGAH_GAGAL"] = true; }
 
 /* ---------- GET: semakan ringkas sahaja ---------- */
 if ($_SERVER["REQUEST_METHOD"] === "GET") {
@@ -72,38 +73,19 @@ function readTetapan(): array {
     $rows = db()->query("SELECT * FROM tetapan")->fetchAll();
     return array_map(fn($r) => castRow($r, ["value"]), $rows);
 }
-function readLog(): array {
-    return db()->query("SELECT masa, userId, tindakan, tempahanId, butiran FROM log ORDER BY id ASC")->fetchAll();
+/** 200 rekod log terkini (terbaru dahulu) */
+function readLogTerkini(): array {
+    return db()->query("SELECT masa, userId, tindakan, tempahanId, butiran FROM log ORDER BY id DESC LIMIT 200")->fetchAll();
 }
 
-/** Tulis-ganti PENUH jadual (setara writeSheet_) — dipakai oleh save_ (admin). */
-function writeAll(string $table, array $rows, array $columns): void {
-    $pdo = db();
-    $pdo->beginTransaction();
-    try {
-        $pdo->exec("DELETE FROM `$table`");
-        if (!empty($rows)) {
-            $cols = implode(",", array_map(fn($c) => "`$c`", $columns));
-            $ph = implode(",", array_map(fn($c) => ":$c", $columns));
-            $stmt = $pdo->prepare("INSERT INTO `$table` ($cols) VALUES ($ph)");
-            foreach ($rows as $r) {
-                $params = [];
-                foreach ($columns as $c) {
-                    $v = $r[$c] ?? null;
-                    if (in_array($c, ["vehicleId", "driverId", "userId"], true) && ($v === "" || $v === null)) {
-                        $params[":$c"] = null; // FK kosong -> NULL supaya konsisten dengan bacaan semula
-                    } else {
-                        $params[":$c"] = ($v === null) ? "" : $v; // sheet asal simpan "" bukan NULL
-                    }
-                }
-                $stmt->execute($params);
-            }
-        }
-        $pdo->commit();
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
+/** ID seterusnya bagi awalan tertentu (cth "K" -> "K6") berdasarkan rekod sedia ada */
+function nextId_(string $table, string $prefix): string {
+    $max = 0;
+    $ids = db()->query("SELECT id FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($ids as $id) {
+        if (preg_match('/^' . preg_quote($prefix, "/") . '(\d+)$/', (string) $id, $m) && (int) $m[1] > $max) $max = (int) $m[1];
     }
+    return $prefix . ($max + 1);
 }
 
 /* ---------- Sesi (token) ---------- */
@@ -217,7 +199,7 @@ function login_(array $d): array {
         $gagal = ($rec ? (int) $rec["gagal"] : 0) + 1;
         $dikunci = $gagal >= MAX_CUBAAN;
         tulisCubaan_($userId, $dikunci ? 0 : $gagal, $dikunci ? $now + KUNCI_MINIT * 60000 : 0);
-        usleep(500000);
+        tandaLengah_();
         if ($dikunci) return ["ok" => false, "ralat" => "Terlalu banyak cubaan gagal. Akaun dikunci " . KUNCI_MINIT . " minit."];
         $baki = MAX_CUBAAN - $gagal;
         return ["ok" => false, "ralat" => "ID pengguna atau kata laluan salah." . ($baki <= 2 ? " ({$baki} cubaan lagi sebelum dikunci)" : "")];
@@ -229,28 +211,138 @@ function login_(array $d): array {
     return ["ok" => true, "token" => bukaSesi_($u["userId"]), "user" => $user, "data" => buildData_($user)];
 }
 
-/* ---------- Simpan data penuh (admin sahaja) — setara save_ ---------- */
-function save_(array $user, array $data): array {
-    if ($user["peranan"] !== "admin") return ["ok" => false, "ralat" => "Tindakan tidak dibenarkan untuk peranan ini."];
+/* ============================================================
+   Simpan SATU rekod (admin) — gantian save_ lama yang menulis-ganti
+   seluruh jadual daripada salinan pelayar admin (boleh memadam tempahan/
+   kemas kini pengguna lain yang dibuat selepas admin log masuk).
+   Setiap tindakan hanya mengubah rekod berkenaan, kemudian memulangkan
+   data terkini supaya paparan admin segar semula.
+   ============================================================ */
+function ambilRekod_(string $table, string $id): ?array {
+    $stmt = db()->prepare("SELECT * FROM `$table` WHERE id = :id");
+    $stmt->execute([":id" => $id]);
+    $r = $stmt->fetch();
+    return $r ?: null;
+}
 
-    if (isset($data["vehicles"]) && is_array($data["vehicles"])) {
-        writeAll("kenderaan", $data["vehicles"], ["id", "plat", "model", "jenis", "kapasiti", "status", "lokasi", "odometer", "roadtax", "bahanApi"]);
+function adaTempahanAktif_(string $kolum, string $id): array {
+    $stmt = db()->prepare("SELECT id FROM tempahan WHERE `$kolum` = :id AND status = 'diluluskan'");
+    $stmt->execute([":id" => $id]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/* ---------- Kenderaan: tambah / kemas kini sebahagian medan / arkib ---------- */
+function vehicleSave_(array $user, array $d): array {
+    $in = is_array($d["vehicle"] ?? null) ? $d["vehicle"] : [];
+    $id = trim((string) ($in["id"] ?? ""));
+    $lama = $id !== "" ? ambilRekod_("kenderaan", $id) : null;
+    if ($id !== "" && !$lama) return ["ok" => false, "ralat" => "Kenderaan tidak dijumpai."];
+
+    // Mulakan daripada rekod SEMASA di server; hanya medan yang dihantar diubah
+    $v = $lama ?: ["id" => "", "plat" => "", "model" => "", "jenis" => "", "kapasiti" => 1, "status" => "tersedia",
+                   "lokasi" => "Garaj Utama", "odometer" => 0, "roadtax" => "", "bahanApi" => 0];
+    foreach (["plat", "model", "jenis", "lokasi", "roadtax", "status"] as $k)
+        if (array_key_exists($k, $in)) $v[$k] = trim((string) $in[$k]);
+    foreach (["kapasiti", "odometer", "bahanApi"] as $k)
+        if (array_key_exists($k, $in)) $v[$k] = (int) $in[$k];
+    $v["plat"] = strtoupper($v["plat"]);
+    $v["bahanApi"] = max(0, min(100, (int) $v["bahanApi"]));
+
+    if ($v["plat"] === "" || $v["model"] === "") return ["ok" => false, "ralat" => "No. pendaftaran dan model wajib diisi."];
+    if ((int) $v["kapasiti"] < 1) return ["ok" => false, "ralat" => "Kapasiti mesti sekurang-kurangnya 1."];
+    if ((int) $v["odometer"] < 0) return ["ok" => false, "ralat" => "Odometer tidak sah."];
+    if (!in_array($v["status"], ["tersedia", "selenggara", "dipadam"], true)) $v["status"] = "tersedia";
+
+    $dup = db()->prepare("SELECT id FROM kenderaan WHERE UPPER(plat) = :p AND id <> :id");
+    $dup->execute([":p" => $v["plat"], ":id" => $id]);
+    if ($dup->fetch()) return ["ok" => false, "ralat" => "No. pendaftaran ini sudah wujud dalam sistem."];
+
+    if ($v["status"] === "dipadam" && ($lama["status"] ?? "") !== "dipadam") {
+        $aktif = adaTempahanAktif_("vehicleId", $id);
+        if ($aktif) return ["ok" => false, "ralat" => "Kenderaan mempunyai tempahan aktif (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
     }
-    if (isset($data["drivers"]) && is_array($data["drivers"])) {
-        writeAll("pemandu", $data["drivers"], ["id", "nama", "telefon", "lesen", "status"]);
+
+    $params = [":plat" => $v["plat"], ":model" => $v["model"], ":jenis" => $v["jenis"], ":kap" => (int) $v["kapasiti"],
+               ":st" => $v["status"], ":lok" => $v["lokasi"], ":odo" => (int) $v["odometer"], ":rt" => $v["roadtax"], ":api" => (int) $v["bahanApi"]];
+    if ($lama) {
+        db()->prepare("UPDATE kenderaan SET plat=:plat, model=:model, jenis=:jenis, kapasiti=:kap, status=:st, lokasi=:lok,
+                       odometer=:odo, roadtax=:rt, bahanApi=:api WHERE id=:id")->execute($params + [":id" => $id]);
+    } else {
+        $id = nextId_("kenderaan", "K");
+        db()->prepare("INSERT INTO kenderaan (id, plat, model, jenis, kapasiti, status, lokasi, odometer, roadtax, bahanApi)
+                       VALUES (:id, :plat, :model, :jenis, :kap, :st, :lok, :odo, :rt, :api)")->execute($params + [":id" => $id]);
     }
-    if (isset($data["bookings"]) && is_array($data["bookings"])) {
-        writeAll("tempahan", $data["bookings"], ["id", "pemohon", "bahagian", "tujuan", "destinasi", "tarikh", "masaMula", "masaTamat", "penumpang", "status", "vehicleId", "driverId", "userId", "masaSelesai", "tarikhTamat"]);
+    $tindakan = !$lama ? "Tambah Kenderaan" : ($v["status"] === "dipadam" && $lama["status"] !== "dipadam" ? "Arkib Kenderaan" : "Kemas Kini Kenderaan");
+    logAudit_($user["userId"], $tindakan, "", $id . " " . $v["plat"]);
+    return ["ok" => true, "id" => $id, "data" => buildData_($user)];
+}
+
+/* ---------- Pemandu: kemas kini rekod SEDIA ADA sahaja (rekod baharu melalui userAdd) ---------- */
+function driverSave_(array $user, array $d): array {
+    $in = is_array($d["driver"] ?? null) ? $d["driver"] : [];
+    $id = trim((string) ($in["id"] ?? ""));
+    $lama = $id !== "" ? ambilRekod_("pemandu", $id) : null;
+    if (!$lama) return ["ok" => false, "ralat" => "Rekod pemandu tidak dijumpai."];
+
+    $p = $lama;
+    foreach (["nama", "telefon", "lesen", "status"] as $k)
+        if (array_key_exists($k, $in)) $p[$k] = trim((string) $in[$k]);
+    if ($p["nama"] === "" || $p["telefon"] === "" || $p["lesen"] === "") return ["ok" => false, "ralat" => "Nama, no. telefon dan kelas lesen wajib diisi."];
+    if (!in_array($p["status"], ["bertugas", "cuti", "dipadam"], true)) $p["status"] = "bertugas";
+
+    if ($p["status"] === "dipadam" && $lama["status"] !== "dipadam") {
+        $aktif = adaTempahanAktif_("driverId", $id);
+        if ($aktif) return ["ok" => false, "ralat" => "Pemandu mempunyai tugasan aktif (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
     }
-    if (isset($data["maintenance"]) && is_array($data["maintenance"])) {
-        writeAll("selenggaraan", $data["maintenance"], ["id", "vehicleId", "tarikh", "jenis", "butiran", "kos", "odometer", "bengkel", "status"]);
+
+    db()->prepare("UPDATE pemandu SET nama=:n, telefon=:t, lesen=:l, status=:s WHERE id=:id")
+        ->execute([":n" => $p["nama"], ":t" => $p["telefon"], ":l" => $p["lesen"], ":s" => $p["status"], ":id" => $id]);
+    $tindakan = $p["status"] === "dipadam" && $lama["status"] !== "dipadam" ? "Arkib Pemandu" : "Kemas Kini Pemandu";
+    logAudit_($user["userId"], $tindakan, "", $id . " " . $p["nama"]);
+    return ["ok" => true, "data" => buildData_($user)];
+}
+
+/* ---------- Selenggaraan: tambah / kemas kini / padam ---------- */
+function maintSave_(array $user, array $d): array {
+    $in = is_array($d["rec"] ?? null) ? $d["rec"] : [];
+    $id = trim((string) ($in["id"] ?? ""));
+    $lama = $id !== "" ? ambilRekod_("selenggaraan", $id) : null;
+    if ($id !== "" && !$lama) return ["ok" => false, "ralat" => "Rekod selenggaraan tidak dijumpai."];
+
+    $s = [
+        "vehicleId" => trim((string) ($in["vehicleId"] ?? "")),
+        "tarikh"    => trim((string) ($in["tarikh"] ?? "")),
+        "jenis"     => trim((string) ($in["jenis"] ?? "")),
+        "butiran"   => trim((string) ($in["butiran"] ?? "")),
+        "bengkel"   => trim((string) ($in["bengkel"] ?? "")),
+        "kos"       => max(0, (float) ($in["kos"] ?? 0)),
+        "odometer"  => max(0, (int) ($in["odometer"] ?? 0)),
+        "status"    => in_array($in["status"] ?? "", ["dijadual", "dalam_proses", "selesai"], true) ? $in["status"] : "selesai",
+    ];
+    if (!$s["tarikh"] || !$s["butiran"] || !$s["bengkel"]) return ["ok" => false, "ralat" => "Tarikh, butiran kerja dan bengkel wajib diisi."];
+    if (!ambilRekod_("kenderaan", $s["vehicleId"])) return ["ok" => false, "ralat" => "Kenderaan tidak dijumpai."];
+
+    $params = [":v" => $s["vehicleId"], ":t" => $s["tarikh"], ":j" => $s["jenis"], ":b" => $s["butiran"], ":k" => $s["kos"],
+               ":o" => $s["odometer"], ":g" => $s["bengkel"], ":s" => $s["status"]];
+    if ($lama) {
+        db()->prepare("UPDATE selenggaraan SET vehicleId=:v, tarikh=:t, jenis=:j, butiran=:b, kos=:k, odometer=:o, bengkel=:g, status=:s WHERE id=:id")
+            ->execute($params + [":id" => $id]);
+    } else {
+        $id = nextId_("selenggaraan", "S");
+        db()->prepare("INSERT INTO selenggaraan (id, vehicleId, tarikh, jenis, butiran, kos, odometer, bengkel, status)
+                       VALUES (:id, :v, :t, :j, :b, :k, :o, :g, :s)")->execute($params + [":id" => $id]);
     }
-    if (isset($data["counters"]) && is_array($data["counters"])) {
-        $rows = [];
-        foreach ($data["counters"] as $key => $value) $rows[] = ["key" => $key, "value" => $value];
-        writeAll("tetapan", $rows, ["key", "value"]);
-    }
-    return ["ok" => true, "masa" => (new DateTime("now", new DateTimeZone("UTC")))->format("c")];
+    logAudit_($user["userId"], $lama ? "Kemas Kini Selenggaraan" : "Tambah Selenggaraan", "", $id . " " . $s["vehicleId"]);
+    return ["ok" => true, "id" => $id, "data" => buildData_($user)];
+}
+
+function maintDel_(array $user, array $d): array {
+    $id = trim((string) ($d["id"] ?? ""));
+    $stmt = db()->prepare("DELETE FROM selenggaraan WHERE id = :id");
+    $stmt->execute([":id" => $id]);
+    if ($stmt->rowCount() === 0) return ["ok" => false, "ralat" => "Rekod selenggaraan tidak dijumpai."];
+    logAudit_($user["userId"], "Padam Selenggaraan", "", $id);
+    return ["ok" => true, "data" => buildData_($user)];
 }
 
 /* ---------- Jejak audit ---------- */
@@ -504,7 +596,7 @@ function tukarPw_(array $user, array $d): array {
     $u = $stmt->fetch();
     if (!$u) return ["ok" => false, "ralat" => "Akaun tidak dijumpai."];
     if (hash_($u["salt"], (string) ($d["passwordLama"] ?? "")) !== $u["passwordHash"]) {
-        usleep(500000);
+        tandaLengah_();
         return ["ok" => false, "ralat" => "Kata laluan semasa salah."];
     }
     $baru = (string) ($d["passwordBaru"] ?? "");
@@ -539,41 +631,54 @@ function senaraiUsers_(): array {
     );
 }
 
-/* ---------- Jana ID rekod pemandu baharu (cth "P5") ---------- */
-function nextDriverId_(): string {
-    $max = 0;
-    $ids = db()->query("SELECT id FROM pemandu")->fetchAll(PDO::FETCH_COLUMN);
-    foreach ($ids as $id) {
-        if (preg_match('/^P(\d+)$/', (string) $id, $m) && (int) $m[1] > $max) $max = (int) $m[1];
-    }
-    return "P" . ($max + 1);
-}
-
 function userAdd_(array $d): array {
     $userId = trim((string) ($d["userId"] ?? ""));
     if (!$userId || empty($d["nama"]) || empty($d["password"])) return ["ok" => false, "ralat" => "Maklumat tidak lengkap."];
+    if (strlen((string) $d["password"]) < 6) return ["ok" => false, "ralat" => "Kata laluan mestilah sekurang-kurangnya 6 aksara."];
     $stmt = db()->prepare("SELECT userId FROM pengguna WHERE LOWER(userId) = LOWER(:u)");
     $stmt->execute([":u" => $userId]);
     if ($stmt->fetch()) return ["ok" => false, "ralat" => "ID pengguna ini sudah wujud."];
     $peranan = in_array($d["peranan"] ?? "", ["admin", "pemandu"], true) ? $d["peranan"] : "pemohon";
     $nama = trim((string) $d["nama"]);
 
-    /* Akaun peranan pemandu — rekod pemandu dicipta SERENTAK di sini.
-       Tiada lagi laluan untuk cipta rekod pemandu berasingan (tab Jadual Pemandu
-       hanya boleh edit/arkib rekod sedia ada). */
-    $driverId = null;
+    /* Akaun peranan pemandu mesti dipautkan kepada rekod pemandu:
+       - driverId diberi  -> pautkan kepada rekod SEDIA ADA (cth. pemandu yang diimport
+         daripada Google Sheets) yang belum mempunyai akaun;
+       - driverId kosong  -> cipta rekod pemandu BAHARU serentak (perlu telefon & lesen). */
+    $driverId = null; $rekodBaru = null;
     if ($peranan === "pemandu") {
-        $telefon = trim((string) ($d["telefon"] ?? ""));
-        $lesen = trim((string) ($d["lesen"] ?? ""));
-        if (!$telefon || !$lesen) return ["ok" => false, "ralat" => "Sila lengkapkan no. telefon dan kelas lesen pemandu."];
-        $driverId = nextDriverId_();
-        db()->prepare("INSERT INTO pemandu (id, nama, telefon, lesen, status) VALUES (:id,:n,:t,:l,'bertugas')")
-            ->execute([":id" => $driverId, ":n" => $nama, ":t" => $telefon, ":l" => $lesen]);
+        $pautId = trim((string) ($d["driverId"] ?? ""));
+        if ($pautId !== "") {
+            $p = ambilRekod_("pemandu", $pautId);
+            if (!$p || $p["status"] === "dipadam") return ["ok" => false, "ralat" => "Rekod pemandu tidak dijumpai atau telah diarkibkan."];
+            $guna = db()->prepare("SELECT userId FROM pengguna WHERE driverId = :d");
+            $guna->execute([":d" => $pautId]);
+            if ($lain = $guna->fetchColumn()) return ["ok" => false, "ralat" => "Rekod pemandu ini sudah dipautkan kepada akaun '{$lain}'."];
+            $driverId = $pautId;
+        } else {
+            $telefon = trim((string) ($d["telefon"] ?? ""));
+            $lesen = trim((string) ($d["lesen"] ?? ""));
+            if (!$telefon || !$lesen) return ["ok" => false, "ralat" => "Sila lengkapkan no. telefon dan kelas lesen pemandu."];
+            $driverId = nextId_("pemandu", "P");
+            $rekodBaru = [":id" => $driverId, ":n" => $nama, ":t" => $telefon, ":l" => $lesen];
+        }
     }
 
-    $salt = saltBaru_();
-    db()->prepare("INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId) VALUES (:u,:n,:p,:h,:s,:d)")
-        ->execute([":u" => $userId, ":n" => $nama, ":p" => $peranan, ":h" => hash_($salt, (string) $d["password"]), ":s" => $salt, ":d" => $driverId]);
+    // Rekod pemandu + akaun disimpan dalam SATU transaksi (elak rekod pemandu yatim jika akaun gagal dicipta)
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        if ($rekodBaru) {
+            $pdo->prepare("INSERT INTO pemandu (id, nama, telefon, lesen, status) VALUES (:id,:n,:t,:l,'bertugas')")->execute($rekodBaru);
+        }
+        $salt = saltBaru_();
+        $pdo->prepare("INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId) VALUES (:u,:n,:p,:h,:s,:d)")
+            ->execute([":u" => $userId, ":n" => $nama, ":p" => $peranan, ":h" => hash_($salt, (string) $d["password"]), ":s" => $salt, ":d" => $driverId]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
     return ["ok" => true, "users" => senaraiUsers_(), "drivers" => readPemandu()];
 }
 
@@ -620,13 +725,16 @@ function handle(): array {
 
     switch ($action) {
         case "load": return ["ok" => true, "data" => buildData_($user)];
-        case "save": return save_($user, $d["data"] ?? []);
+        case "vehicleSave": return adminSahaja_($user) ?? vehicleSave_($user, $d);
+        case "driverSave": return adminSahaja_($user) ?? driverSave_($user, $d);
+        case "maintSave": return adminSahaja_($user) ?? maintSave_($user, $d);
+        case "maintDel": return adminSahaja_($user) ?? maintDel_($user, $d);
         case "bookingAdd": return bookingAdd_($user, $d["booking"] ?? []);
         case "bookingComplete": return bookingComplete_($user, $d);
         case "bookingApprove": return adminSahaja_($user) ?? bookingApprove_($user, $d);
         case "bookingReject": return adminSahaja_($user) ?? bookingReject_($user, $d);
         case "bookingEdit": return adminSahaja_($user) ?? bookingEdit_($user, $d);
-        case "auditLog": return adminSahaja_($user) ?? ["ok" => true, "log" => array_reverse(array_slice(readLog(), -200))];
+        case "auditLog": return adminSahaja_($user) ?? ["ok" => true, "log" => readLogTerkini()];
         case "logPurge": return adminSahaja_($user) ?? logPurge_($user);
         case "logout":
             db()->prepare("DELETE FROM sesi WHERE token = :t")->execute([":t" => $d["token"] ?? ""]);
@@ -652,13 +760,19 @@ function handle(): array {
     }
 }
 
-$pdo = db();
-$gotLock = $pdo->query("SELECT GET_LOCK('sisken_api', 10)")->fetchColumn();
+$gotLock = false;
 try {
-    $res = handle();
+    $pdo = db();
+    $gotLock = (int) $pdo->query("SELECT GET_LOCK('sisken_api', 10)")->fetchColumn() === 1;
+    // Tanpa kunci, semakan konflik/ID boleh berlumba — lebih selamat tolak daripada teruskan
+    $res = $gotLock ? handle() : ["ok" => false, "ralat" => "Pelayan sibuk. Sila cuba sebentar lagi."];
 } catch (Throwable $e) {
-    $res = ["ok" => false, "ralat" => $e->getMessage()];
+    error_log("SisKEN API: " . $e->getMessage() . " @ " . $e->getFile() . ":" . $e->getLine());
+    $res = ["ok" => false, "ralat" => "Ralat pelayan. Sila cuba lagi atau hubungi pentadbir sistem."];
 } finally {
-    if ($gotLock) $pdo->query("SELECT RELEASE_LOCK('sisken_api')");
+    if ($gotLock) {
+        try { $pdo->query("SELECT RELEASE_LOCK('sisken_api')"); } catch (Throwable $e) { /* sambungan terputus — kunci dilepas automatik */ }
+    }
 }
+if ($LENGAH_GAGAL) usleep(500000); // selepas kunci dilepaskan
 echo json_encode($res);
