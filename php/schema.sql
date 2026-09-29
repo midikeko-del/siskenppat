@@ -1,6 +1,5 @@
 -- ============================================================
---  SisKEN — Skema MySQL (gantian backend Google Apps Script)
---  Struktur jadual selari dengan SHEET_DEFS dalam gas/Code.js
+--  SisKEN — Skema MySQL
 --  Nota: install.php mencipta pangkalan data ikut DB_NAME (config.php)
 --  dan MENGABAIKAN dua baris CREATE DATABASE / USE di bawah. Baris itu
 --  hanya untuk import manual (cth. phpMyAdmin) dengan nama lalai "sisken".

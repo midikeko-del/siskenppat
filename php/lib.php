@@ -6,13 +6,13 @@
 
 require_once __DIR__ . "/config.php";
 
-/** Sama seperti hash_() dalam gas/Code.js: SHA-256 hex(salt + password) */
+/** SHA-256 hex(salt + password) */
 function hash_(string $salt, string $password): string {
     return hash("sha256", $salt . $password);
 }
 
 function saltBaru_(): string {
-    // 12 aksara hex — setara Utilities.getUuid().replace(/-/g,"").slice(0,12)
+    // 12 aksara hex rawak
     return substr(bin2hex(random_bytes(8)), 0, 12);
 }
 

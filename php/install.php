@@ -2,7 +2,6 @@
 /**
  * ============================================================
  *  SisKEN — Pemasangan (jalankan SEKALI melalui pelayar)
- *  Setara fungsi setup() dalam gas/Code.js:
  *   1. Cipta pangkalan data & jadual (schema.sql)
  *   2. Cipta akaun admin pertama (admin / admin123) jika belum ada
  * ============================================================

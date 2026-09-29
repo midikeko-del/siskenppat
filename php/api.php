@@ -1,11 +1,9 @@
 <?php
 /**
  * ============================================================
- *  SisKEN — Backend PHP + MySQL (gantian gas/Code.js Apps Script)
- *  VERSI 2 — Log Masuk, Token Sesi & Peranan (port terus dari GAS)
+ *  SisKEN — Backend PHP + MySQL
+ *  Log Masuk, Token Sesi & Peranan
  * ============================================================
- *  Kontrak API SAMA seperti backend Apps Script asal supaya
- *  frontend (js/*.js) tidak perlu diubah — hanya API_URL bertukar.
  *  POST JSON: { action, token, ...payload } → balas JSON.
  * ============================================================
  */
@@ -40,7 +38,7 @@ if ($_SERVER["REQUEST_METHOD"] === "GET") {
     exit;
 }
 
-/* ---------- Utiliti baca/tulis jadual (setara readSheet_/writeSheet_) ---------- */
+/* ---------- Utiliti baca jadual ---------- */
 function castRow(array $row, array $intCols = [], array $floatCols = [], array $nullEmptyCols = []): array {
     foreach ($row as $k => $v) {
         if (in_array($k, $intCols, true)) $row[$k] = (int) $v;
@@ -114,7 +112,7 @@ function bukaSesi_(string $userId): string {
     return $token;
 }
 
-/* ---------- Bina payload data untuk app (setara buildData_) ---------- */
+/* ---------- Bina payload data untuk app ---------- */
 function buildData_(array $user): array {
     $isAdmin = $user["peranan"] === "admin";
     $bookings = readTempahan();
@@ -147,7 +145,7 @@ function buildData_(array $user): array {
     return $out;
 }
 
-/* ---------- Data untuk paparan umum (disanitasi) — setara dataAwam_ ---------- */
+/* ---------- Data untuk paparan umum (disanitasi) ---------- */
 function dataAwam_(): array {
     $bookings = array_values(array_filter(readTempahan(), fn($b) => $b["status"] === "diluluskan" || $b["status"] === "selesai"));
     $bookings = array_map(fn($b) => [
@@ -165,7 +163,7 @@ function adminSahaja_(array $user): ?array {
     return $user["peranan"] === "admin" ? null : ["ok" => false, "ralat" => "Hanya admin dibenarkan."];
 }
 
-/* ---------- Log masuk (kawalan brute-force setara login_) ---------- */
+/* ---------- Log masuk (dengan kawalan brute-force) ---------- */
 function bacaCubaan_(string $userId): ?array {
     $stmt = db()->prepare("SELECT userId, gagal, kunciSehingga FROM keselamatan WHERE userId = :u");
     $stmt->execute([":u" => $userId]);
@@ -371,7 +369,7 @@ function logPurge_(array $user): array {
     return ["ok" => true, "dibuang" => $dibuang];
 }
 
-/* ---------- ID tempahan seterusnya (setara nextBookingId_) ---------- */
+/* ---------- ID tempahan seterusnya ---------- */
 function nextBookingId_(): string {
     $max = 1045;
     $ids = db()->query("SELECT id FROM tempahan")->fetchAll(PDO::FETCH_COLUMN);
@@ -643,7 +641,7 @@ function userAdd_(array $d): array {
 
     /* Akaun peranan pemandu mesti dipautkan kepada rekod pemandu:
        - driverId diberi  -> pautkan kepada rekod SEDIA ADA (cth. pemandu yang diimport
-         daripada Google Sheets) yang belum mempunyai akaun;
+         daripada data lama) yang belum mempunyai akaun;
        - driverId kosong  -> cipta rekod pemandu BAHARU serentak (perlu telefon & lesen). */
     $driverId = null; $rekodBaru = null;
     if ($peranan === "pemandu") {
@@ -708,7 +706,7 @@ function userDel_(array $user, array $d): array {
 }
 
 /* ============================================================
-   POST: semua operasi (setara doPost, dikunci setara LockService)
+   POST: semua operasi (setiap permintaan dikunci dengan GET_LOCK MySQL)
    ============================================================ */
 function handle(): array {
     $raw = file_get_contents("php://input");

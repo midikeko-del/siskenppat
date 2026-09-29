@@ -241,7 +241,7 @@ function render(){
 }
 
 /* ============================================================
-   SAMBUNGAN API (Apps Script) + LOG MASUK
+   SAMBUNGAN API (backend PHP) + LOG MASUK
    ============================================================ */
 const apiAktif = () => !!API_URL; // API_URL relatif ("php/api.php") ATAU URL penuh — kosongkan untuk mod tempatan
 let TOKEN = null;

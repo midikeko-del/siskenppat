@@ -6,7 +6,7 @@ function renderLog(){
   if(!apiAktif() || !TOKEN){
     return `<h2 class="sect">Log Audit</h2>
       <div class="card"><div style="padding:30px;color:var(--slate);font-size:14px;line-height:1.7">
-        Modul ini memerlukan sambungan Google Sheets dan log masuk sebenar.
+        Modul ini memerlukan sambungan pelayan (backend PHP) dan log masuk sebenar.
       </div></div>`;
   }
   setTimeout(muatLog, 0); // muat data selepas paparan dipasang
@@ -22,7 +22,7 @@ function renderLog(){
       <thead><tr><th>Masa</th><th>Pengguna</th><th>Tindakan</th><th>Tempahan</th><th>Butiran</th></tr></thead>
       <tbody id="log-body"><tr><td colspan="5" style="padding:24px;text-align:center;color:var(--slate-l)">Memuatkan…</td></tr></tbody>
     </table></div></div>
-    <div class="muted" style="padding:4px 2px">Memaparkan 200 rekod terkini. Rekod penuh ada dalam helaian "Log" Google Sheet.</div>`;
+    <div class="muted" style="padding:4px 2px">Memaparkan 200 rekod terkini. Rekod penuh ada dalam jadual <code>log</code> pangkalan data MySQL.</div>`;
 }
 
 /* Tukar butiran kelulusan ID → nama mudah baca.

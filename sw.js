@@ -4,7 +4,7 @@
    terkini bila online), fallback ke cache bila luar talian.
    Permintaan ke API backend (php/api.php) TIDAK di-cache.
    ============================================================ */
-const CACHE = "sisken-v12"; // naikkan nombor (v2, v3...) bila kemas kini app
+const CACHE = "sisken-v13"; // naikkan nombor (v2, v3...) bila kemas kini app
 
 const ASET = [
   "./",
@@ -46,7 +46,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
-  // Jangan sentuh permintaan ke domain lain (cth: API Apps Script)
+  // Jangan sentuh permintaan ke domain lain
   if (url.origin !== self.location.origin) return;
 
   e.respondWith(

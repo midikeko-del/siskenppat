@@ -36,7 +36,7 @@ function renderPengguna(){
     </div></div>`;
 }
 
-/* Rekod pemandu aktif yang BELUM dipautkan kepada mana-mana akaun (cth. diimport dari Google Sheets) */
+/* Rekod pemandu aktif yang BELUM dipautkan kepada mana-mana akaun (cth. diimport daripada data lama) */
 const pemanduTanpaAkaun = () => pemanduAktif().filter(d => !users.some(u => u.driverId === d.id));
 
 function openUserForm(){
