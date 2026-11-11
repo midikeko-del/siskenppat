@@ -269,6 +269,9 @@ let TOKEN = null;
 let currentUser = null;
 let users = [];
 const isAdmin = () => currentUser && currentUser.peranan === "admin";
+/* Superadmin: admin yang boleh mengurus akaun admin lain, menukar status
+   superadmin, dan memadam log audit. Admin biasa tidak boleh. */
+const isSuper = () => !!(currentUser && currentUser.superadmin);
 
 async function api(action, payload = {}){
   const r = await fetch(API_URL, {
@@ -397,7 +400,7 @@ async function doLogin(){
 }
 
 function demoLogin(){
-  currentUser = { userId: "demo", nama: "Admin (Demo)", peranan: "admin" };
+  currentUser = { userId: "demo", nama: "Admin (Demo)", peranan: "admin", superadmin: true };
   masukApp();
   setSync("local");
 }
@@ -405,7 +408,9 @@ function demoLogin(){
 function masukApp(){
   $("login-root").innerHTML = "";
   $("u-nama").textContent = currentUser.nama;
-  $("u-peranan").textContent = currentUser.peranan === "admin" ? "Admin" : (currentUser.peranan === "pemandu" ? "Pemandu" : "Pemohon");
+  $("u-peranan").textContent = currentUser.superadmin ? "Superadmin"
+    : currentUser.peranan === "admin" ? "Admin"
+    : currentUser.peranan === "pemandu" ? "Pemandu" : "Pemohon";
   $("u-avatar").textContent = currentUser.nama.replace(/^(En\.|Pn\.|Cik|Dr\.)\s*/i, "").charAt(0).toUpperCase() || "?";
   tab = isAdmin() ? "dashboard" : (currentUser.peranan === "pemandu" ? "tugasan" : "tempahan");
   $("btn-auth").textContent = "⎋ Keluar";

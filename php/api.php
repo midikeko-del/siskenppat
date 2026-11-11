@@ -92,11 +92,12 @@ function cekSesi_(?string $token): ?array {
     $stmt->execute([":token" => $token, ":now" => $now]);
     $row = $stmt->fetch();
     if (!$row) return null;
-    $u = db()->prepare("SELECT userId, nama, peranan, driverId FROM pengguna WHERE userId = :u");
+    $u = db()->prepare("SELECT userId, nama, peranan, driverId, superadmin FROM pengguna WHERE userId = :u");
     $u->execute([":u" => $row["userId"]]);
     $user = $u->fetch();
     if (!$user) return null;
-    return ["userId" => $user["userId"], "nama" => $user["nama"], "peranan" => $user["peranan"], "driverId" => $user["driverId"] ?: null];
+    return ["userId" => $user["userId"], "nama" => $user["nama"], "peranan" => $user["peranan"],
+            "driverId" => $user["driverId"] ?: null, "superadmin" => (int) $user["superadmin"] === 1];
 }
 
 function bukaSesi_(string $userId): string {
@@ -133,7 +134,8 @@ function buildData_(array $user): array {
     foreach (readTetapan() as $r) $out["counters"][$r["key"]] = (int) $r["value"];
     if ($isAdmin) {
         $out["users"] = array_map(
-            fn($u) => ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"], "driverId" => $u["driverId"] ?: null],
+            fn($u) => ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"],
+                       "driverId" => $u["driverId"] ?: null, "superadmin" => (int) ($u["superadmin"] ?? 0) === 1],
             readPengguna()
         );
     }
@@ -157,6 +159,40 @@ function dataAwam_(): array {
 
 function adminSahaja_(array $user): ?array {
     return $user["peranan"] === "admin" ? null : ["ok" => false, "ralat" => "Hanya admin dibenarkan."];
+}
+
+/* ============================================================
+   SUPERADMIN — lapisan perlindungan nipis di atas peranan "admin".
+   Admin biasa menguruskan operasi harian (tempahan, kenderaan, pemandu,
+   akaun pemohon/pemandu). Hanya superadmin boleh menyentuh akaun admin,
+   menukar status superadmin, dan memadam log audit — supaya seorang admin
+   tidak boleh menaikkan dirinya sendiri atau membuang jejak auditnya.
+   ============================================================ */
+function isSuper_(array $user): bool {
+    return !empty($user["superadmin"]);
+}
+
+function superSahaja_(array $user): ?array {
+    if ($user["peranan"] !== "admin") return ["ok" => false, "ralat" => "Hanya admin dibenarkan."];
+    return isSuper_($user) ? null : ["ok" => false, "ralat" => "Tindakan ini hanya untuk superadmin."];
+}
+
+/** Akaun yang dilindungi daripada admin biasa (admin & superadmin) */
+function akaunDilindungi_(?array $sasaran): bool {
+    return $sasaran && ($sasaran["peranan"] === "admin" || (int) ($sasaran["superadmin"] ?? 0) === 1);
+}
+
+function ambilPengguna_(string $userId): ?array {
+    $stmt = db()->prepare("SELECT userId, nama, peranan, driverId, superadmin FROM pengguna WHERE userId = :u");
+    $stmt->execute([":u" => $userId]);
+    $r = $stmt->fetch();
+    return $r ?: null;
+}
+
+function bilSuperadmin_(string $kecuali = ""): int {
+    $stmt = db()->prepare("SELECT COUNT(*) FROM pengguna WHERE superadmin = 1 AND userId <> :u");
+    $stmt->execute([":u" => $kecuali]);
+    return (int) $stmt->fetchColumn();
 }
 
 /* ---------- Log masuk (dengan kawalan brute-force) ---------- */
@@ -213,7 +249,8 @@ function login_(array $d): array {
     if ($rec) tulisCubaan_($kunci, 0, 0);
     // Naik taraf hash legasi (SHA-256) kepada password_hash() secara automatik semasa log masuk berjaya
     if (perluNaikTaraf_($u)) setKataLaluan_($u["userId"], $password);
-    $user = ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"], "driverId" => $u["driverId"] ?: null];
+    $user = ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"],
+             "driverId" => $u["driverId"] ?: null, "superadmin" => (int) ($u["superadmin"] ?? 0) === 1];
     logAudit_($u["userId"], "Log Masuk", "", "");
     return ["ok" => true, "token" => bukaSesi_($u["userId"]), "user" => $user, "data" => buildData_($user)];
 }
@@ -304,6 +341,8 @@ function driverSave_(array $user, array $d): array {
 
     db()->prepare("UPDATE pemandu SET nama=:n, telefon=:t, lesen=:l, status=:s WHERE id=:id")
         ->execute([":n" => $p["nama"], ":t" => $p["telefon"], ":l" => $p["lesen"], ":s" => $p["status"], ":id" => $id]);
+    // Akaun log masuk yang dipautkan guna nama yang sama — kemas kini serentak
+    db()->prepare("UPDATE pengguna SET nama=:n WHERE driverId=:id")->execute([":n" => $p["nama"], ":id" => $id]);
     $tindakan = $p["status"] === "dipadam" && $lama["status"] !== "dipadam" ? "Arkib Pemandu" : "Kemas Kini Pemandu";
     logAudit_($user["userId"], $tindakan, "", $id . " " . $p["nama"]);
     return ["ok" => true, "data" => buildData_($user)];
@@ -776,14 +815,17 @@ function drvStatus_(array $user, array $d): array {
 /* ---------- Pengurusan pengguna (admin) ---------- */
 function senaraiUsers_(): array {
     return array_map(
-        fn($u) => ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"], "driverId" => $u["driverId"] ?: null],
+        fn($u) => ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"],
+                   "driverId" => $u["driverId"] ?: null, "superadmin" => (int) ($u["superadmin"] ?? 0) === 1],
         readPengguna()
     );
 }
 
-function userAdd_(array $d): array {
+function userAdd_(array $d, array $user): array {
     $userId = trim((string) ($d["userId"] ?? ""));
     if (!$userId || empty($d["nama"]) || empty($d["password"])) return ["ok" => false, "ralat" => "Maklumat tidak lengkap."];
+    if (($d["peranan"] ?? "") === "admin" && !isSuper_($user))
+        return ["ok" => false, "ralat" => "Hanya superadmin boleh mencipta akaun admin."];
     if (!preg_match('/^[A-Za-z0-9._-]{3,50}$/', $userId))
         return ["ok" => false, "ralat" => "ID pengguna hanya boleh mengandungi huruf, nombor, titik, sengkang dan garis bawah (3–50 aksara, tanpa ruang)."];
     if (strlen((string) $d["password"]) < 6) return ["ok" => false, "ralat" => "Kata laluan mestilah sekurang-kurangnya 6 aksara."];
@@ -791,6 +833,7 @@ function userAdd_(array $d): array {
     $stmt->execute([":u" => $userId]);
     if ($stmt->fetch()) return ["ok" => false, "ralat" => "ID pengguna ini sudah wujud."];
     $peranan = in_array($d["peranan"] ?? "", ["admin", "pemandu"], true) ? $d["peranan"] : "pemohon";
+    $jadiSuper = $peranan === "admin" && !empty($d["superadmin"]);
     $nama = trim((string) $d["nama"]);
 
     /* Akaun peranan pemandu mesti dipautkan kepada rekod pemandu:
@@ -823,8 +866,9 @@ function userAdd_(array $d): array {
         if ($rekodBaru) {
             $pdo->prepare("INSERT INTO pemandu (id, nama, telefon, lesen, status) VALUES (:id,:n,:t,:l,'bertugas')")->execute($rekodBaru);
         }
-        $pdo->prepare("INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId) VALUES (:u,:n,:p,:h,'',:d)")
-            ->execute([":u" => $userId, ":n" => $nama, ":p" => $peranan, ":h" => hashBaru_((string) $d["password"]), ":d" => $driverId]);
+        $pdo->prepare("INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId, superadmin) VALUES (:u,:n,:p,:h,'',:d,:s)")
+            ->execute([":u" => $userId, ":n" => $nama, ":p" => $peranan, ":h" => hashBaru_((string) $d["password"]),
+                       ":d" => $driverId, ":s" => $jadiSuper ? 1 : 0]);
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();
@@ -833,10 +877,14 @@ function userAdd_(array $d): array {
     return ["ok" => true, "users" => senaraiUsers_(), "drivers" => readPemandu()];
 }
 
-function userReset_(array $d): array {
+function userReset_(array $d, array $user): array {
     $userId = (string) ($d["userId"] ?? "");
-    $stmt = db()->prepare("SELECT userId FROM pengguna WHERE userId = :u"); $stmt->execute([":u" => $userId]);
-    if (!$stmt->fetch()) return ["ok" => false, "ralat" => "Pengguna tidak dijumpai."];
+    $sasaran = ambilPengguna_($userId);
+    if (!$sasaran) return ["ok" => false, "ralat" => "Pengguna tidak dijumpai."];
+    /* Admin biasa tidak boleh menetapkan semula kata laluan akaun admin lain —
+       jika tidak, dia boleh mengambil alih akaun tersebut. */
+    if ($userId !== $user["userId"] && akaunDilindungi_($sasaran) && !isSuper_($user))
+        return ["ok" => false, "ralat" => "Hanya superadmin boleh menetapkan semula kata laluan akaun admin."];
     $pw = (string) ($d["password"] ?? "");
     if (strlen($pw) < 6) return ["ok" => false, "ralat" => "Kata laluan mestilah sekurang-kurangnya 6 aksara."];
     setKataLaluan_($userId, $pw);
@@ -849,13 +897,61 @@ function userDel_(array $user, array $d): array {
     $userId = (string) ($d["userId"] ?? "");
     if ($userId === $user["userId"]) return ["ok" => false, "ralat" => "Anda tidak boleh memadam akaun sendiri."];
     $pdo = db();
-    $ada = $pdo->prepare("SELECT userId FROM pengguna WHERE userId = :u");
-    $ada->execute([":u" => $userId]);
-    if (!$ada->fetch()) return ["ok" => false, "ralat" => "Pengguna tidak dijumpai."];
+    $sasaran = ambilPengguna_($userId);
+    if (!$sasaran) return ["ok" => false, "ralat" => "Pengguna tidak dijumpai."];
+    if (akaunDilindungi_($sasaran) && !isSuper_($user))
+        return ["ok" => false, "ralat" => "Hanya superadmin boleh memadam akaun admin."];
+    if ((int) ($sasaran["superadmin"] ?? 0) === 1 && bilSuperadmin_($userId) === 0)
+        return ["ok" => false, "ralat" => "Mesti ada sekurang-kurangnya seorang superadmin."];
     $admins = (int) $pdo->query("SELECT COUNT(*) FROM pengguna WHERE peranan='admin' AND userId <> " . $pdo->quote($userId))->fetchColumn();
     if ($admins === 0) return ["ok" => false, "ralat" => "Mesti ada sekurang-kurangnya seorang admin."];
     $pdo->prepare("DELETE FROM pengguna WHERE userId = :u")->execute([":u" => $userId]);
     $pdo->prepare("DELETE FROM sesi WHERE userId = :u")->execute([":u" => $userId]);
+    return ["ok" => true, "users" => senaraiUsers_()];
+}
+
+/* ---------- Tukar nama penuh akaun ----------
+   Admin biasa boleh menukar nama akaun pemohon/pemandu & namanya sendiri;
+   akaun admin hanya boleh ditukar oleh superadmin. Nama rekod pemandu yang
+   dipautkan dikemas kini serentak supaya kedua-duanya tidak terpesong. */
+function userRename_(array $user, array $d): array {
+    $userId = (string) ($d["userId"] ?? "");
+    $nama = trim((string) ($d["nama"] ?? ""));
+    $sasaran = ambilPengguna_($userId);
+    if (!$sasaran) return ["ok" => false, "ralat" => "Pengguna tidak dijumpai."];
+    if ($userId !== $user["userId"] && akaunDilindungi_($sasaran) && !isSuper_($user))
+        return ["ok" => false, "ralat" => "Hanya superadmin boleh menukar nama akaun admin."];
+    if ($nama === "") return ["ok" => false, "ralat" => "Nama tidak boleh kosong."];
+    if (mb_strlen($nama) > 100) return ["ok" => false, "ralat" => "Nama terlalu panjang (maksimum 100 aksara)."];
+    if ($nama === $sasaran["nama"]) return ["ok" => true, "users" => senaraiUsers_(), "drivers" => readPemandu()];
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("UPDATE pengguna SET nama=:n WHERE userId=:u")->execute([":n" => $nama, ":u" => $userId]);
+        if (!empty($sasaran["driverId"]))
+            $pdo->prepare("UPDATE pemandu SET nama=:n WHERE id=:id")->execute([":n" => $nama, ":id" => $sasaran["driverId"]]);
+        $pdo->commit();
+    } catch (Throwable $e) { $pdo->rollBack(); throw $e; }
+
+    logAudit_($user["userId"], "Tukar Nama Pengguna", "", $userId . ": " . $sasaran["nama"] . " -> " . $nama);
+    return ["ok" => true, "users" => senaraiUsers_(), "drivers" => readPemandu()];
+}
+
+/* ---------- Naik taraf / tarik balik status superadmin (superadmin sahaja) ---------- */
+function userSetSuper_(array $user, array $d): array {
+    $userId = (string) ($d["userId"] ?? "");
+    $jadi = !empty($d["superadmin"]);
+    $sasaran = ambilPengguna_($userId);
+    if (!$sasaran) return ["ok" => false, "ralat" => "Pengguna tidak dijumpai."];
+    if ($sasaran["peranan"] !== "admin")
+        return ["ok" => false, "ralat" => "Hanya akaun berperanan Admin boleh dijadikan superadmin."];
+    if (!$jadi && (int) ($sasaran["superadmin"] ?? 0) === 1 && bilSuperadmin_($userId) === 0)
+        return ["ok" => false, "ralat" => "Mesti ada sekurang-kurangnya seorang superadmin."];
+
+    db()->prepare("UPDATE pengguna SET superadmin = :s WHERE userId = :u")
+        ->execute([":s" => $jadi ? 1 : 0, ":u" => $userId]);
+    logAudit_($user["userId"], $jadi ? "Lantik Superadmin" : "Tarik Superadmin", "", $userId);
     return ["ok" => true, "users" => senaraiUsers_()];
 }
 
@@ -891,19 +987,21 @@ function handle(): array {
         case "bookingUnassign": return adminSahaja_($user) ?? bookingUnassign_($user, $d);
         case "auditLog": return adminSahaja_($user) ?? ["ok" => true, "log" => readLogTerkini()];
         case "penolakanList": return penolakanList_($user);
-        case "logPurge": return adminSahaja_($user) ?? logPurge_($user);
+        case "logPurge": return superSahaja_($user) ?? logPurge_($user);
         case "logout":
             db()->prepare("DELETE FROM sesi WHERE token = :t")->execute([":t" => $d["token"] ?? ""]);
             return ["ok" => true];
         case "tukarPw": return tukarPw_($user, $d);
         case "drvStatus": return drvStatus_($user, $d);
+        case "userSetSuper": return superSahaja_($user) ?? userSetSuper_($user, $d);
+        case "userRename": return adminSahaja_($user) ?? userRename_($user, $d);
         case "userAdd": {
-            $res = adminSahaja_($user) ?? userAdd_($d);
+            $res = adminSahaja_($user) ?? userAdd_($d, $user);
             if ($res["ok"] ?? false) logAudit_($user["userId"], "Tambah Pengguna", "", (string) ($d["userId"] ?? ""));
             return $res;
         }
         case "userReset": {
-            $res = adminSahaja_($user) ?? userReset_($d);
+            $res = adminSahaja_($user) ?? userReset_($d, $user);
             if ($res["ok"] ?? false) logAudit_($user["userId"], "Reset Kata Laluan", "", (string) ($d["userId"] ?? ""));
             return $res;
         }

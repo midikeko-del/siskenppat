@@ -42,6 +42,7 @@ try {
     //     (CREATE TABLE IF NOT EXISTS tidak mengubah jadual yang sudah ada.)
     $lajurBaharu = [
         "tempahan" => ["diterima" => "VARCHAR(20) NOT NULL DEFAULT ''"],
+        "pengguna" => ["superadmin" => "TINYINT(1) NOT NULL DEFAULT 0"],
     ];
     foreach ($lajurBaharu as $jadual => $medan) {
         foreach ($medan as $nama => $takrif) {
@@ -53,6 +54,13 @@ try {
             if ((int) $semak->fetchColumn() === 0) {
                 $root->exec("ALTER TABLE `$jadual` ADD COLUMN `$nama` $takrif");
                 echo "✔ Lajur baharu ditambah: {$jadual}.{$nama}\n";
+                /* Naik taraf SEMUA admin sedia ada kepada superadmin supaya tiada sesiapa
+                   terkunci daripada mengurus akaun. Tarik balik yang tidak perlu melalui
+                   tab Pengguna selepas ini. */
+                if ($jadual === "pengguna" && $nama === "superadmin") {
+                    $n = $root->exec("UPDATE pengguna SET superadmin = 1 WHERE peranan = 'admin'");
+                    echo "✔ {$n} akaun admin sedia ada dinaik taraf kepada superadmin (tarik balik yang tidak perlu melalui tab Pengguna).\n";
+                }
             }
         }
     }
@@ -62,8 +70,8 @@ try {
     $count = (int) $pdo->query("SELECT COUNT(*) FROM pengguna")->fetchColumn();
     if ($count === 0) {
         $stmt = $pdo->prepare(
-            "INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId)
-             VALUES (:userId, :nama, :peranan, :hash, :salt, NULL)"
+            "INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId, superadmin)
+             VALUES (:userId, :nama, :peranan, :hash, :salt, NULL, 1)"
         );
         $stmt->execute([
             ":userId" => "admin",

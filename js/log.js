@@ -15,7 +15,7 @@ function renderLog(){
       <h2 class="sect">Log Audit</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-dark" onclick="muatLog()">↻ Muat Semula</button>
-        <button class="btn" style="border:1px solid var(--red-line);color:var(--red)" onclick="padamLogLama()">🗑 Padam log &gt;1 tahun</button>
+        ${isSuper() ? `<button class="btn" style="border:1px solid var(--red-line);color:var(--red)" onclick="padamLogLama()">🗑 Padam log &gt;1 tahun</button>` : ""}
       </div>
     </div>
     <div class="card"><div class="tbl-scroll"><table>

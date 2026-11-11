@@ -10,15 +10,29 @@ function renderPengguna(){
         Tetapkan <b>API_URL</b> di bahagian atas <code>js/core.js</code>, pasang backend PHP (lihat README.md), kemudian log masuk dengan akaun admin untuk menambah dan mengurus pengguna.
       </div></div>`;
   }
-  const rows = users.map(u => `<tr>
+  const rows = users.map(u => {
+    const sendiri = u.userId === currentUser.userId;
+    const dilindungi = u.peranan === "admin" || u.superadmin;   // akaun admin
+    const bolehUrus = sendiri || !dilindungi || isSuper();      // admin biasa tidak boleh sentuh akaun admin lain
+    const peranan = u.superadmin ? {label:"Superadmin", cls:"red"}
+      : u.peranan === "admin" ? {label:"Admin", cls:"amber"}
+      : u.peranan === "pemandu" ? {label:"Pemandu", cls:"green"}
+      : {label:"Pemohon", cls:"gray"};
+    return `<tr>
     <td style="font-family:Consolas,monospace;font-weight:700">${esc(u.userId)}</td>
-    <td>${esc(u.nama)}${u.userId === currentUser.userId ? ' <span class="muted">(anda)</span>' : ""}</td>
-    <td>${chip(u.peranan === "admin" ? {label:"Admin", cls:"amber"} : u.peranan === "pemandu" ? {label:"Pemandu", cls:"green"} : {label:"Pemohon", cls:"gray"})}${u.peranan === "pemandu" && u.driverId && drv(u.driverId) ? `<div class="muted" style="margin-top:4px">↳ ${esc(drv(u.driverId).nama)}</div>` : ""}</td>
+    <td>${esc(u.nama)}${sendiri ? ' <span class="muted">(anda)</span>' : ""}</td>
+    <td>${chip(peranan)}${u.peranan === "pemandu" && u.driverId && drv(u.driverId) ? `<div class="muted" style="margin-top:4px">↳ ${esc(drv(u.driverId).nama)}</div>` : ""}</td>
     <td style="white-space:nowrap">
-      <button class="btn-edit" onclick="openResetPw('${esc(u.userId)}')">🔑 Tukar Kata Laluan</button>
-      ${u.userId !== currentUser.userId ? `<button class="btn-del" onclick="askDelUser('${esc(u.userId)}')">🗑 Padam</button>` : ""}
+      ${bolehUrus ? `<button class="btn-edit" onclick="openEditNama('${esc(u.userId)}')">✎ Nama</button>` : ""}
+      ${bolehUrus ? `<button class="btn-edit" onclick="openResetPw('${esc(u.userId)}')">🔑 Tukar Kata Laluan</button>` : ""}
+      ${bolehUrus && !sendiri ? `<button class="btn-del" onclick="askDelUser('${esc(u.userId)}')">🗑 Padam</button>` : ""}
+      ${isSuper() && u.peranan === "admin" && !sendiri
+        ? `<button class="btn-edit" onclick="askTukarSuper('${esc(u.userId)}', ${u.superadmin ? "false" : "true"})">${u.superadmin ? "☆ Tarik Superadmin" : "⭐ Jadikan Superadmin"}</button>`
+        : ""}
+      ${bolehUrus ? "" : '<span class="muted">Akaun admin — hanya superadmin boleh urus</span>'}
     </td>
-  </tr>`).join("");
+  </tr>`;
+  }).join("");
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
@@ -31,7 +45,8 @@ function renderPengguna(){
     </table></div></div>
     <div class="card"><div style="padding:16px 20px;font-size:13px;color:var(--slate);line-height:1.7">
       <b>Peranan:</b> <b>Admin</b> boleh akses semua modul termasuk kelulusan, kenderaan, laporan dan pengguna.
-      <b>Pemandu</b> hanya nampak tugasan mereka sendiri dan boleh menanda selesai (masa sebenar direkodkan). <b>Pemohon</b> hanya boleh menghantar tempahan dan melihat status tempahan mereka sendiri.
+      <b>Superadmin</b> ialah admin yang turut boleh mencipta/memadam akaun admin, menukar status superadmin, dan memadam log audit — admin biasa tidak boleh menyentuh akaun admin lain.
+      <b>Pemandu</b> hanya nampak tugasan mereka sendiri, perlu menerima tugasan sebelum boleh menandakannya selesai. <b>Pemohon</b> hanya boleh menghantar tempahan dan melihat status tempahan mereka sendiri.
       Kata laluan disimpan sebagai cincangan (hash) — tiada sesiapa boleh melihat kata laluan sebenar, termasuk admin.
     </div></div>`;
 }
@@ -49,13 +64,19 @@ function openUserForm(){
         <div class="row2">
           <label class="fld"><span>ID Pengguna</span><input id="u-id" placeholder="cth: staf01" oninput="checkUserForm()"></label>
           <label class="fld"><span>Peranan</span>
-            <select id="u-role" onchange="$('u-drv-wrap').style.display = this.value==='pemandu' ? 'block' : 'none'; checkUserForm()">
+            <select id="u-role" onchange="onTukarPeranan()">
               <option value="pemohon">Pemohon</option>
               <option value="pemandu">Pemandu</option>
-              <option value="admin">Admin</option>
+              ${isSuper() ? '<option value="admin">Admin</option>' : ""}
             </select>
           </label>
         </div>
+        ${isSuper() ? `<div id="u-super-wrap" style="display:none;margin:-4px 0 12px">
+          <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate);cursor:pointer">
+            <input type="checkbox" id="u-super" style="width:auto;margin:0">
+            Jadikan superadmin — boleh urus akaun admin &amp; padam log audit
+          </label>
+        </div>` : ""}
         <label class="fld"><span>Nama Penuh</span><input id="u-nm" placeholder="cth: En. Hafiz Rahman" oninput="checkUserForm()"></label>
         <div id="u-drv-wrap" style="display:none">
           <label class="fld"><span>Rekod Pemandu</span>
@@ -82,6 +103,15 @@ function openUserForm(){
       </div>
     </div>
   </div>`;
+  checkUserForm();
+}
+
+/* Tukar peranan -> papar/sembunyi medan rekod pemandu & pilihan superadmin */
+function onTukarPeranan(){
+  const v = $("u-role").value;
+  $("u-drv-wrap").style.display = v === "pemandu" ? "block" : "none";
+  const sw = $("u-super-wrap");
+  if(sw){ sw.style.display = v === "admin" ? "block" : "none"; if(v !== "admin") $("u-super").checked = false; }
   checkUserForm();
 }
 
@@ -115,6 +145,7 @@ async function submitUser(){
       userId: $("u-id").value.trim(),
       nama: $("u-nm").value.trim(),
       peranan: $("u-role").value,
+      superadmin: !!($("u-super") && $("u-super").checked),
       driverId: pautId || undefined,
       telefon: isPemandu && !pautId ? $("u-drv-tel").value.trim() : undefined,
       lesen: isPemandu && !pautId ? $("u-drv-lesen").value.trim() : undefined,
@@ -191,6 +222,77 @@ function askDelUser(userId){
         closeModal(); render(); notify("Pengguna dipadam.");
       }catch(e){ closeModal(); notify("Gagal menghubungi pelayan."); }
     });
+}
+
+/* ---------- Tukar nama penuh akaun ---------- */
+function openEditNama(userId){
+  const u = users.find(x => x.userId === userId);
+  if(!u) return;
+  const pautPemandu = u.peranan === "pemandu" && u.driverId;
+  $("modal-root").innerHTML = `
+  <div class="overlay">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-h"><h3>Tukar Nama — ${esc(u.userId)}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <label class="fld"><span>Nama Penuh</span><input id="nm-baru" maxlength="100" value="${esc(u.nama)}" placeholder="cth: En. Hafiz bin Rahman" oninput="checkEditNama()"></label>
+        ${pautPemandu ? `<p class="muted" style="font-size:13px;margin:-6px 0 12px;line-height:1.6">Nama rekod pemandu yang dipautkan turut dikemas kini supaya kedua-duanya kekal sama.</p>` : ""}
+        <div id="nm-err"></div>
+        <button class="btn btn-amber" id="nm-ok" style="justify-content:center" onclick="submitEditNama('${esc(u.userId)}')">Simpan Nama</button>
+      </div>
+    </div>
+  </div>`;
+  checkEditNama();
+  setTimeout(() => { const el = $("nm-baru"); if(el) el.focus(); }, 50);
+}
+
+function checkEditNama(){
+  $("nm-ok").disabled = !$("nm-baru").value.trim();
+}
+
+async function submitEditNama(userId){
+  const nama = $("nm-baru").value.trim();
+  if(!nama) return;
+  const btn = $("nm-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  try{
+    const res = await api("userRename", { userId, nama });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("nm-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal menukar nama.")}</span>`;
+      btn.disabled = false; btn.textContent = "Simpan Nama"; return;
+    }
+    users = res.users;
+    if(res.drivers) drivers = res.drivers;
+    /* Nama sendiri berubah → kemas kini juga paparan di bar atas */
+    if(userId === currentUser.userId){
+      currentUser.nama = nama;
+      $("u-nama").textContent = nama;
+      $("u-avatar").textContent = nama.replace(/^(En\.|Pn\.|Cik|Dr\.)\s*/i, "").charAt(0).toUpperCase() || "?";
+    }
+    closeModal(); render(); notify("Nama dikemas kini.");
+  }catch(e){
+    $("nm-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "Simpan Nama";
+  }
+}
+
+/* ---------- Lantik / tarik status superadmin (superadmin sahaja) ---------- */
+function askTukarSuper(userId, jadi){
+  const u = users.find(x => x.userId === userId);
+  if(!u) return;
+  confirmModal(jadi ? "Lantik Superadmin" : "Tarik Status Superadmin",
+    jadi
+      ? `Jadikan <b>${esc(u.nama)}</b> (${esc(u.userId)}) seorang <b>superadmin</b>?<br><br>Dia akan boleh mencipta &amp; memadam akaun admin, menukar status superadmin, dan memadam log audit.`
+      : `Tarik balik status superadmin daripada <b>${esc(u.nama)}</b> (${esc(u.userId)})?<br><br>Dia kekal sebagai admin biasa — tidak lagi boleh menyentuh akaun admin lain atau memadam log audit.`,
+    async () => {
+      try{
+        const res = await api("userSetSuper", { userId, superadmin: jadi });
+        if(res.sesiTamat){ sesiTamat(); return; }
+        if(!res.ok){ closeModal(); notify(res.ralat || "Gagal menukar status.", "err"); return; }
+        users = res.users;
+        closeModal(); render();
+        notify(jadi ? `${u.nama} kini seorang superadmin.` : `Status superadmin ${u.nama} ditarik.`);
+      }catch(e){ closeModal(); notify("Gagal menghubungi pelayan.", "err"); }
+    }, jadi ? "⭐ Ya, Lantik" : "☆ Ya, Tarik", jadi ? "btn-amber" : "btn-red");
 }
 
 /* ============================================================

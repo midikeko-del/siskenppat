@@ -77,7 +77,9 @@ CREATE TABLE IF NOT EXISTS pengguna (
   peranan       VARCHAR(20)  NOT NULL DEFAULT 'pemohon',
   passwordHash  VARCHAR(100) NOT NULL DEFAULT '',
   salt          VARCHAR(30)  NOT NULL DEFAULT '',
-  driverId      VARCHAR(20)  NULL
+  driverId      VARCHAR(20)  NULL,
+  -- 1 = superadmin: boleh urus akaun admin, tukar superadmin & padam log audit
+  superadmin    TINYINT(1)   NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Sesi (token log masuk) ---------------------------------------------
