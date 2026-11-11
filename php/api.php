@@ -972,7 +972,9 @@ function handle(): array {
     if (!$user) return ["ok" => false, "ralat" => "Sesi tidak sah atau telah tamat. Sila log masuk semula.", "sesiTamat" => true];
 
     switch ($action) {
-        case "load": return ["ok" => true, "data" => buildData_($user)];
+        /* "user" disertakan supaya pelayar boleh memulihkan sesi selepas muat semula
+           tanpa menyimpan peranan di sisi klien — peranan sentiasa segar dari DB. */
+        case "load": return ["ok" => true, "user" => $user, "data" => buildData_($user)];
         case "vehicleSave": return adminSahaja_($user) ?? vehicleSave_($user, $d);
         case "driverSave": return adminSahaja_($user) ?? driverSave_($user, $d);
         case "maintSave": return adminSahaja_($user) ?? maintSave_($user, $d);

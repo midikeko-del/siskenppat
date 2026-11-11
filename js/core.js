@@ -265,6 +265,18 @@ const apiAktif = () => !!API_URL; // API_URL relatif ("php/api.php") ATAU URL pe
    senarai kosong — supaya data rekaan tidak pernah dipaparkan jika pelayan tidak dapat
    dihubungi (luar talian / XAMPP mati). */
 if(apiAktif()){ vehicles = []; drivers = []; bookings = []; maintenance = []; }
+/* ============================================================
+   SESI DISIMPAN DALAM sessionStorage
+   Token kekal ketika pelayar dimuat semula / butang back ditekan, tetapi
+   HILANG apabila tab ditutup — jadi sesi tidak tertinggal terbuka pada
+   komputer yang dikongsi. Hanya token disimpan; peranan & kebenaran
+   sentiasa diambil segar daripada pelayan.
+   ============================================================ */
+const SESI_KEY = "sisken_token";
+function simpanSesi(t){ try{ sessionStorage.setItem(SESI_KEY, t); }catch(e){} }
+function bacaSesi(){ try{ return sessionStorage.getItem(SESI_KEY) || null; }catch(e){ return null; } }
+function buangSesi(){ try{ sessionStorage.removeItem(SESI_KEY); }catch(e){} }
+
 let TOKEN = null;
 let currentUser = null;
 let users = [];
@@ -388,6 +400,7 @@ async function doLogin(){
       btn.disabled = false; btn.textContent = "Log Masuk"; return;
     }
     TOKEN = res.token;
+    simpanSesi(res.token);
     currentUser = res.user;
     // Guna data server walaupun kosong (pemasangan baharu) — JANGAN hantar data contoh ke pangkalan data sebenar
     if(res.data) pakaiData(res.data);
@@ -396,6 +409,29 @@ async function doLogin(){
   }catch(e){
     $("lg-err").innerHTML = '<span class="err">Tidak dapat menghubungi pelayan. Semak API_URL dan sambungan rangkaian.</span>';
     btn.disabled = false; btn.textContent = "Log Masuk";
+  }
+}
+
+/* Cuba sambung semula sesi tersimpan. Pulang true jika berjaya masuk app. */
+async function pulihSesi(){
+  if(!apiAktif()) return false;
+  const token = bacaSesi();
+  if(!token) return false;
+  TOKEN = token;
+  try{
+    const res = await api("load");
+    if(res.ok && res.user){
+      currentUser = res.user;
+      if(res.data) pakaiData(res.data);
+      masukApp();
+      setSync("ok");
+      return true;
+    }
+    buangSesi(); TOKEN = null;   // token tidak sah atau telah tamat
+    return false;
+  }catch(e){
+    TOKEN = null;                // pelayan tidak dapat dihubungi — token dikekalkan untuk cubaan seterusnya
+    return false;
   }
 }
 
@@ -419,6 +455,7 @@ function masukApp(){
 }
 
 function sesiTamat(){
+  buangSesi();
   TOKEN = null; currentUser = null; users = [];
   $("u-nama").textContent = "—";
   $("u-peranan").textContent = "Belum log masuk";
@@ -433,6 +470,7 @@ function sesiTamat(){
 async function doLogout(){
   if(!currentUser) return;
   if(TOKEN){ try{ api("logout"); }catch(e){} }
+  buangSesi();
   TOKEN = null; currentUser = null; users = [];
   $("u-nama").textContent = "—";
   $("u-peranan").textContent = "Belum log masuk";

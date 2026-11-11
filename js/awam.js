@@ -12,6 +12,8 @@ function kosongkanData(){
 async function mulaApp(){
   if(apiAktif()){
     setSync("loading");
+    // Sesi tersimpan masih sah → terus masuk app, tidak perlu log masuk semula
+    if(await pulihSesi()) return;
     try{
       const res = await api("awam");
       if(res.ok && res.data){

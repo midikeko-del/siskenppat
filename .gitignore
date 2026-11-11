@@ -1,3 +1,6 @@
+# Pakej serahan yang dijana (bina semula bila perlu)
+*.zip
+
 # Folder deploy bersih (salinan fail frontend — dijana semula bila perlu)
 public/
 
