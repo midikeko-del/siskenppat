@@ -19,13 +19,14 @@ sisken/
   js/
     core.js         ← state, utiliti, API (API_URL -> php/api.php), login, render(), nav (DIKONGSI)
     awam.js dashboard.js tempahan.js kenderaan.js pemandu.js
-    selenggara.js laporan.js pengguna.js tugasan.js log.js
+    selenggara.js laporan.js pengguna.js tugasan.js penolakan.js log.js
     boot.js         ← mulaApp() + daftar service worker (MUAT TERAKHIR)
   sw.js             ← service worker PWA (ada senarai ASET + nombor CACHE)
   manifest.json  icon-192.png  icon-512.png
   php/
     config.php      ← kredensial DB (DB_HOST/DB_NAME/DB_USER/DB_PASS)
-    lib.php         ← utiliti dikongsi (hash kata laluan, masa KL)
+    lib.php         ← utiliti dikongsi (hash kata laluan, masa KL, validasi tarikh/masa)
+    .htaccess       ← sekat akses web terus ke config.php / lib.php / schema.sql (perlu AllowOverride)
     schema.sql      ← struktur jadual MySQL
     install.php     ← jalankan SEKALI melalui pelayar: cipta DB + akaun admin pertama
     api.php         ← titik masuk API tunggal
@@ -65,6 +66,7 @@ Kemudian ikut langkah 5 (setup backend PHP) untuk jalankan/deploy semula.
 4. Semak/kemas kini kredensial DB di `php/config.php` (lalai sesuai untuk XAMPP: host `127.0.0.1`, user `root`, tiada kata laluan).
 5. Buka pelayar ke `http://localhost/sisken/php/install.php` — ini akan:
    - Cipta pangkalan data (ikut `DB_NAME`) & semua jadual (`php/schema.sql`)
+   - Tambah lajur baharu pada pemasangan SEDIA ADA (migrasi) — selamat dijalankan berulang kali
    - Cipta akaun admin pertama (`admin` / `admin123`) jika jadual Pengguna masih kosong
 6. **Selepas berjaya, PADAM atau lindungi `php/install.php`** (elak sesiapa jalankan semula/reset di server produksi).
 7. Buka `http://localhost/sisken/index.html`, log masuk dengan `admin` / `admin123`, **tukar kata laluan serta-merta** (butang 🔑 dalam app).
@@ -84,9 +86,10 @@ cd sisken
 rm -rf public && mkdir -p public/js public/php
 cp index.html style.css sw.js manifest.json icon-192.png icon-512.png public/
 cp js/*.js public/js/
-cp php/*.php php/schema.sql public/php/
+cp php/*.php php/schema.sql php/.htaccess public/php/
 # upload SELURUH folder public/ ke hosting (php/api.php & js/*.js MESTI dikemas kini serentak)
 # kalau tambah/buang fail js → kemas kini senarai ASET + naikkan CACHE dalam sw.js
+# setiap kali ubah js/css → naikkan nombor ?v= pada <script>/<link> dalam index.html (sama dengan nombor CACHE) supaya pelayar tidak guna fail lama
 ```
 
 ## 7. Perkara penting (gotchas)
@@ -95,20 +98,25 @@ cp php/*.php php/schema.sql public/php/
 - **HTTPS** diperlukan untuk ciri PWA (offline/install). HTTP biasa app masih jalan tapi tanpa PWA.
 - Backend berjalan on-premise/LAN — **tiada pergantungan internet** untuk operasi harian.
 - **Data di MySQL tempatan** (`php/config.php`) — pastikan backup DB berkala (`mysqldump`).
-- Jadual MySQL (`php/schema.sql`): kenderaan, pemandu, tempahan, selenggaraan, pengguna, sesi, tetapan, keselamatan, log.
+- Jadual MySQL (`php/schema.sql`): kenderaan, pemandu, tempahan, selenggaraan, pengguna, sesi, tetapan, keselamatan, penolakan, log.
+- **Selepas menarik kod baharu, jalankan semula `php/install.php` SEKALI** — ia menambah lajur yang baharu (cth. `tempahan.diterima`). Tanpa langkah ini API akan gagal dengan ralat lajur tidak wujud.
 - Ralat pelayan dicatat dalam log ralat PHP (XAMPP: `C:\xampp\php\logs\php_error_log` / log Apache) — pengguna hanya nampak mesej umum.
 
 ## 8. Apa yang dah disiapkan (ikut commit)
 - **Backend PHP + MySQL** (PDO, prepared statements): login, awam, load, vehicleSave, driverSave, maintSave, maintDel, bookingAdd/Approve/Reject/Complete/Edit, tukarPw, drvStatus, userAdd/Reset/Del, auditLog, logPurge, logout. Setiap permintaan dikunci dengan `GET_LOCK` MySQL untuk elak race condition.
-- Keselamatan: kawalan peranan server (anti lulus-sendiri), tapis data bukan-admin, kunci brute-force (5 cubaan/15 min), hash bersalt (SHA-256+salt).
+- Keselamatan: kawalan peranan server (anti lulus-sendiri), tapis data bukan-admin, kunci brute-force (5 cubaan/15 min, ikut ID + IP), kata laluan `password_hash()` (akaun lama SHA-256 dinaik taraf automatik semasa log masuk), tiada CORS (same-origin sahaja), `php/.htaccess` menyekat `config.php`/`lib.php`/`schema.sql`, validasi format tarikh/masa & ID pengguna di server.
 - Integriti: kelulusan + semakan konflik di server, sekat tarikh/masa lampau, ID rekod dijana server, simpanan satu rekod (tiada tulis-ganti jadual).
+- **Pengesahan pemandu:** tempahan yang diluluskan admin perlu diterima pemandu (`bookingAccept`). Pemandu boleh menolak dengan sebab (`bookingDecline`) — tempahan kembali ke "Menunggu Kelulusan", kenderaan & pemandu dilepaskan, sebab direkod dalam jadual `penolakan` DAN Log Audit. Butang "Tandakan Selesai" hanya muncul selepas tugasan diterima (admin tiada had). Jika admin mengedit tarikh/masa tempahan yang telah diterima, pengesahan terbatal dan pemandu perlu terima semula.
+- **Tiada pengesahan = tiada perjalanan:** kenderaan TIDAK bertukar "Dalam Perjalanan" selagi pemandu belum menekan Terima. Jika masa perjalanan tiba tanpa pengesahan, kenderaan dipapar MERAH "Belum Disahkan Pemandu" dan kad tempahan memberi amaran kepada admin.
+- **Tarik Balik Tugasan (admin, `bookingUnassign`):** untuk tempahan diluluskan yang pemandu belum sahkan — tempahan kembali ke "Menunggu Kelulusan" dan kenderaan/pemandu dilepaskan supaya boleh ditugaskan semula. Tempahan yang telah bermula tetapi belum disahkan pemandu juga masih boleh diedit admin (sekatan "sedang berjalan" hanya terpakai selepas pemandu mengesahkan).
+- **Tempoh bersedia 30 minit:** setelah tugasan diterima, kenderaan dipapar "Tidak Tersedia — Sedang Disiapkan" bermula 30 minit sebelum masa bertolak (pemalar `MINIT_SEDIA` dalam `js/core.js`). Ini paparan sahaja — semakan pertindihan di server kekal ikut masa sebenar perjalanan.
+- **Tab "Tugasan Ditolak"** (`js/penolakan.js`, aksi `penolakanList`): admin melihat semua penolakan, pemandu melihat penolakannya sendiri — berserta sebab, kenderaan/pemandu asal dan status tempahan terkini. Rekod kekal walaupun tempahan diluluskan semula kemudian. Pelayan memulangkan 200 rekod terkini; carian & paginasi (20/muka) dilakukan di pelayar. Log Audit kekal seperti biasa.
 - Ciri: status kenderaan auto, arkib (soft-delete) kenderaan/pemandu, pemandu kemas kini odometer/minyak/lokasi semasa selesai, log audit + padam >1 tahun, penapis/carian/paginasi Tempahan & Tugasan.
 - UI: menu hamburger telefon, navigasi minggu (kalendar) jadual pemandu (admin + paparan umum), label "Bersedia".
 - Senibina: frontend dipecahkan kepada `style.css` + `js/*.js` setiap menu.
 
 ## 9. Cadangan kerja seterusnya (belum dibuat)
 - Tukar `admin123` (PALING penting) selepas setiap pemasangan baharu.
-- Hashing PBKDF2 / `password_hash()` (regang) — sekarang SHA-256 satu pusingan + salt.
 - Butang "nyaharkib" untuk pulih kenderaan/pemandu.
 - Auto-padam log audit (cron/scheduled task) — sekarang manual melalui aksi `logPurge`.
 - Padam/lindungi `php/install.php` selepas pemasangan produksi (jangan tinggal boleh diakses awam).

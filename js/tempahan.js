@@ -10,13 +10,19 @@ function kadTempahan(b){
         <h4>${esc(b.tujuan)}</h4>
         <div class="meta">📍 ${esc(b.destinasi)} &nbsp;·&nbsp; ${paparTarikh(b)}, ${paparMasa(b)} &nbsp;·&nbsp; ${b.penumpang} penumpang</div>
         <div class="who">Pemohon: ${esc(b.pemohon)} — ${esc(b.bahagian)}</div>
-        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)} &nbsp;|&nbsp; ${esc(d.nama)}</div>` : ""}
+        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}${d ? ` &nbsp;|&nbsp; ${esc(d.nama)}` : ""}</div>` : ""}
+        ${b.status === "diluluskan" && b.driverId ? (b.diterima
+          ? `<div class="who" style="color:var(--green);margin-top:4px">✔ Pemandu telah terima tugasan (${fmtMasaSelesai(b.diterima)})</div>`
+          : (mulaDT(b) <= skrgStr()
+            ? `<div class="who" style="color:var(--red);font-weight:600;margin-top:4px">⚠️ Pemandu belum terima tugasan walaupun masa perjalanan telah tiba — sila hubungi pemandu atau tarik balik tugasan.</div>`
+            : `<div class="who" style="color:var(--amber-d);margin-top:4px">⏳ Menunggu pemandu terima tugasan</div>`)) : ""}
         ${b.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(b.masaSelesai)}</div>` : ""}
       </div>
       ${isAdmin() && (b.status === "menunggu" || b.status === "diluluskan") ? `
       <div style="display:flex;flex-direction:column;gap:8px;align-self:flex-start">
         ${b.status === "menunggu" ? `<button class="btn btn-dark" onclick="openApprove('${b.id}')">Proses ›</button>` : ""}
         <button class="btn btn-edit" onclick="openEditForm('${b.id}')">✎ Edit</button>
+        ${b.status === "diluluskan" && !b.diterima ? `<button class="btn btn-red" onclick="askTarikBalik('${b.id}')">↩ Tarik Balik</button>` : ""}
       </div>` : ""}
     </div>`;
 }
@@ -128,7 +134,7 @@ function openApprove(id){
   ).join("");
 
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal">
       <div class="modal-h"><h3>Proses Tempahan ${b.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
@@ -210,10 +216,38 @@ async function doReject(id){
   }catch(e){ notify("Gagal menghubungi pelayan."); }
 }
 
+/* ---------- Admin: tarik balik tugasan yang belum disahkan pemandu ---------- */
+function askTarikBalik(id){
+  const b = bookings.find(x => x.id === id);
+  if(!b) return;
+  const v = veh(b.vehicleId), d = drv(b.driverId);
+  confirmModal("Tarik Balik Tugasan",
+    `Tarik balik tugasan <b>${esc(b.id)}</b>${v ? ` daripada <b>${esc(v.plat)}</b>` : ""}${d ? ` dan <b>${esc(d.nama)}</b>` : ""}?
+     <br><br>Tempahan akan kembali ke <b>Menunggu Kelulusan</b> supaya anda boleh menugaskan kenderaan/pemandu lain.
+     Hanya boleh dilakukan selagi pemandu belum mengesahkan tugasan.`,
+    async () => {
+      closeModal();
+      if(!apiAktif() || !TOKEN){
+        b.status = "menunggu"; b.vehicleId = null; b.driverId = null; b.diterima = "";
+        render(); notify(`Tugasan ${id} ditarik balik (mod tempatan).`);
+        return;
+      }
+      setSync("saving");
+      try{
+        const res = await api("bookingUnassign", { id });
+        if(res.sesiTamat){ sesiTamat(); return; }
+        if(!res.ok){ setSync("err"); render(); notify(res.ralat || "Gagal menarik balik tugasan.", "err"); return; }
+        if(res.data) pakaiData(res.data); else Object.assign(b, res.booking);
+        setSync("ok"); render();
+        notify(`Tugasan ${id} ditarik balik. Tempahan kembali ke Menunggu Kelulusan.`);
+      }catch(e){ setSync("err"); render(); notify("Gagal menghubungi pelayan.", "err"); }
+    }, "↩ Ya, Tarik Balik", "btn-red");
+}
+
 /* ---------- Modal: tempahan baharu ---------- */
 function openForm(){
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal">
       <div class="modal-h"><h3>Tempahan Baharu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
@@ -276,7 +310,7 @@ async function submitForm(){
   if(!apiAktif() || !TOKEN){
     const id = `T-${nextNum++}`;
     bookings.unshift({ id, status:"menunggu", vehicleId:null, driverId:null,
-      userId: currentUser ? currentUser.userId : null, masaSelesai:"", ...booking });
+      userId: currentUser ? currentUser.userId : null, masaSelesai:"", diterima:"", ...booking });
     closeModal(); render(); notify(`Tempahan ${id} dihantar (mod tempatan).`);
     return;
   }
@@ -304,14 +338,15 @@ async function submitForm(){
 function openEditForm(id){
   const b = bookings.find(x => x.id === id);
   if(!b) return;
-  /* Tempahan sudah bermula → tiada perubahan dibenarkan */
-  if(mulaDT(b) <= skrgStr()){
+  /* Tempahan sudah bermula DAN disahkan pemandu → tiada perubahan dibenarkan.
+     Jika pemandu belum sahkan, admin masih boleh membetulkan tempahan. */
+  if(mulaDT(b) <= skrgStr() && b.diterima){
     notify("Tempahan sedang berjalan. Tiada perubahan dibenarkan.", "warn");
     return;
   }
   const v = veh(b.vehicleId), d = drv(b.driverId);
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal">
       <div class="modal-h"><h3>Edit Tempahan ${b.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
@@ -376,7 +411,7 @@ async function submitEdit(id){
   const b = bookings.find(x => x.id === id);
   if(!b) return;
   /* Semak semula pada saat hantar — mungkin sudah bermula sejak modal dibuka */
-  if(mulaDT(b) <= skrgStr()){
+  if(mulaDT(b) <= skrgStr() && b.diterima){
     closeModal();
     notify("Tempahan sedang berjalan. Tiada perubahan dibenarkan.", "warn");
     render();

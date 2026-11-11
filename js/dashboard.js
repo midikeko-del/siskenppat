@@ -19,7 +19,7 @@ function renderDashboard(){
       </div></td>
       <td>${chip(VSTATUS[statusKenderaan(v)])}</td>
       <td style="color:var(--slate)">📍 ${esc(v.lokasi)}</td>
-      <td style="color:var(--slate)">${trip ? `${esc(d.nama)} · <span class="muted">${esc(trip.destinasi)}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
+      <td style="color:var(--slate)">${trip ? `${d ? esc(d.nama) : "<span class=\"muted\">Pemandu tiada rekod</span>"} · <span class="muted">${esc(trip.destinasi)}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
     </tr>`;
   }).join("");
 
@@ -37,6 +37,7 @@ function renderDashboard(){
             ${v ? `<span class="plat">${esc(v.plat)}</span>` : ""}
             <span style="font-size:13px;color:var(--slate)">${d ? esc(d.nama) : ""}</span>
             ${chip(BSTATUS[t.status])}
+            ${t.status === "diluluskan" && !t.diterima ? chip({label:"Belum diterima pemandu", cls:"amber"}) : ""}
             ${t.status === "diluluskan" ? `<button class="btn-sm" onclick="complete('${t.id}')">Tanda Selesai</button>` : ""}
           </div>
         </div>`;

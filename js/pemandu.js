@@ -81,7 +81,7 @@ function openDrvForm(id){
   const d = drv(id);
   if(!d) return;
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal">
       <div class="modal-h"><h3>Edit Pemandu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">

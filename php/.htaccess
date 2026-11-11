@@ -1,0 +1,6 @@
+# SisKEN — lindungi fail dalaman daripada dibuka terus melalui pelayar.
+# Hanya api.php (dan install.php semasa pemasangan pertama) perlu diakses dari web.
+<FilesMatch "^(config\.php|lib\.php|schema\.sql)$">
+    Require all denied
+</FilesMatch>
+Options -Indexes

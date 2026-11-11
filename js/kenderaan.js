@@ -2,8 +2,9 @@
 /* ---------- KENDERAAN ---------- */
 function renderKenderaan(){
   const cards = kenderaanAktif().map(v => {
-    const taxWarn = v.roadtax <= tambahHari(HARI_INI, 60); // tamat dalam 60 hari / sudah tamat
-    const taxTamat = v.roadtax < HARI_INI;                 // sudah luput
+    const adaTax = /^\d{4}-\d{2}-\d{2}$/.test(String(v.roadtax || "")); // rekod lama mungkin tiada tarikh
+    const taxWarn = adaTax && v.roadtax <= tambahHari(HARI_INI, 60); // tamat dalam 60 hari / sudah tamat
+    const taxTamat = adaTax && v.roadtax < HARI_INI;                 // sudah luput
     return `<div class="veh">
       <div class="veh-top">
         <div>
@@ -57,7 +58,7 @@ function openVehForm(id){
   editVehId = id || null;
   const v = id ? veh(id) : null;
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal">
       <div class="modal-h"><h3>${v ? "Edit Kenderaan — " + esc(v.plat) : "Tambah Kenderaan Baharu"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">

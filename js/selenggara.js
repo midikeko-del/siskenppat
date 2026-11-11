@@ -60,7 +60,7 @@ function openSelForm(id){
   const jOpts = JENIS_SEL.map(j => `<option ${s&&s.jenis===j?"selected":""}>${j}</option>`).join("");
 
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal">
       <div class="modal-h"><h3>${s ? "Edit Rekod Selenggaraan" : "Tambah Rekod Selenggaraan"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">

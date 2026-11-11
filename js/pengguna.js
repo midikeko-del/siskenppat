@@ -15,8 +15,8 @@ function renderPengguna(){
     <td>${esc(u.nama)}${u.userId === currentUser.userId ? ' <span class="muted">(anda)</span>' : ""}</td>
     <td>${chip(u.peranan === "admin" ? {label:"Admin", cls:"amber"} : u.peranan === "pemandu" ? {label:"Pemandu", cls:"green"} : {label:"Pemohon", cls:"gray"})}${u.peranan === "pemandu" && u.driverId && drv(u.driverId) ? `<div class="muted" style="margin-top:4px">↳ ${esc(drv(u.driverId).nama)}</div>` : ""}</td>
     <td style="white-space:nowrap">
-      <button class="btn-edit" onclick="openResetPw('${u.userId}')">🔑 Tukar Kata Laluan</button>
-      ${u.userId !== currentUser.userId ? `<button class="btn-del" onclick="askDelUser('${u.userId}')">🗑 Padam</button>` : ""}
+      <button class="btn-edit" onclick="openResetPw('${esc(u.userId)}')">🔑 Tukar Kata Laluan</button>
+      ${u.userId !== currentUser.userId ? `<button class="btn-del" onclick="askDelUser('${esc(u.userId)}')">🗑 Padam</button>` : ""}
     </td>
   </tr>`).join("");
 
@@ -42,7 +42,7 @@ const pemanduTanpaAkaun = () => pemanduAktif().filter(d => !users.some(u => u.dr
 function openUserForm(){
   const bebas = pemanduTanpaAkaun();
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal" style="max-width:460px">
       <div class="modal-h"><h3>Tambah Pengguna Baharu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
@@ -138,7 +138,7 @@ async function submitUser(){
 function openResetPw(userId){
   const u = users.find(x => x.userId === userId);
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal" style="max-width:420px">
       <div class="modal-h"><h3>Tukar Kata Laluan — ${esc(u.nama)}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
@@ -200,7 +200,7 @@ function openTukarPwSendiri(){
   if(!currentUser) return;
   if(!apiAktif() || !TOKEN){ notify("Mod demo: tiada kata laluan untuk ditukar."); return; }
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal" style="max-width:420px">
       <div class="modal-h"><h3>Tukar Kata Laluan Saya</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">

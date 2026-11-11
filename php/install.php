@@ -38,11 +38,29 @@ try {
     }
     echo "✔ Pangkalan data & jadual sedia.\n";
 
+    // 3b) Migrasi pemasangan SEDIA ADA — tambah lajur baharu yang belum wujud.
+    //     (CREATE TABLE IF NOT EXISTS tidak mengubah jadual yang sudah ada.)
+    $lajurBaharu = [
+        "tempahan" => ["diterima" => "VARCHAR(20) NOT NULL DEFAULT ''"],
+    ];
+    foreach ($lajurBaharu as $jadual => $medan) {
+        foreach ($medan as $nama => $takrif) {
+            $semak = $root->prepare(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+            );
+            $semak->execute([":db" => DB_NAME, ":t" => $jadual, ":c" => $nama]);
+            if ((int) $semak->fetchColumn() === 0) {
+                $root->exec("ALTER TABLE `$jadual` ADD COLUMN `$nama` $takrif");
+                echo "✔ Lajur baharu ditambah: {$jadual}.{$nama}\n";
+            }
+        }
+    }
+
     // 4) Cipta akaun admin pertama jika jadual Pengguna masih kosong
     $pdo = db();
     $count = (int) $pdo->query("SELECT COUNT(*) FROM pengguna")->fetchColumn();
     if ($count === 0) {
-        $salt = saltBaru_();
         $stmt = $pdo->prepare(
             "INSERT INTO pengguna (userId, nama, peranan, passwordHash, salt, driverId)
              VALUES (:userId, :nama, :peranan, :hash, :salt, NULL)"
@@ -51,8 +69,8 @@ try {
             ":userId" => "admin",
             ":nama"   => "Admin PPAT",
             ":peranan"=> "admin",
-            ":hash"   => hash_($salt, "admin123"),
-            ":salt"   => $salt,
+            ":hash"   => hashBaru_("admin123"),
+            ":salt"   => "",
         ]);
         echo "✔ Akaun pertama dicipta -> ID: admin | Kata Laluan: admin123\n";
         echo "  >> TUKAR kata laluan ini selepas log masuk pertama! <<\n";

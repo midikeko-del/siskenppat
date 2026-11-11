@@ -97,6 +97,8 @@ let mingguOffsetAwam = 0; // offset minggu jadual pemandu (paparan umum)
 
 const VSTATUS = {
   tersedia:{label:"Tersedia", cls:"green"},
+  menunggu_perjalanan:{label:"Tidak Tersedia — Sedang Disiapkan", cls:"amber"},
+  belum_disahkan:{label:"Belum Disahkan Pemandu", cls:"red"},
   dalam_perjalanan:{label:"Dalam Perjalanan", cls:"amber"},
   selenggara:{label:"Selenggaraan", cls:"red"},
 };
@@ -124,6 +126,18 @@ const paparMasa = (b) => b.masaTamat ? `${b.masaMula}–${b.masaTamat}` : `${b.m
 /* Sokongan tempahan berbilang hari */
 const tarikhTamatEf = (b) => b.tarikhTamat || b.tarikh;                       // tarikh hujung efektif
 const mulaDT  = (b) => `${b.tarikh} ${b.masaMula}`;                           // titik mula (tarikh+masa)
+/* Tempoh bersedia: setelah pemandu menekan "Terima Tugas", kenderaan ditanda tidak
+   tersedia lebih awal supaya ia & pemandu sempat disiapkan sebelum bertolak. */
+const MINIT_SEDIA = 30;
+function tolakMinit(dt, n){
+  const [t, m] = String(dt).split(" ");
+  const [Y, M, D] = t.split("-").map(Number);
+  const [h, mi] = m.split(":").map(Number);
+  const d = new Date(Date.UTC(Y, M - 1, D, h, mi - n));
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+/* Titik kenderaan mula dikira sibuk — 30 minit lebih awal HANYA jika tugasan telah diterima */
+const mulaSibuk = (b) => b.diterima ? tolakMinit(mulaDT(b), MINIT_SEDIA) : mulaDT(b);
 const tamatDT = (b) => `${tarikhTamatEf(b)} ${tamatEf(b)}`;                   // titik tamat (tarikh+masa)
 const dudukiHari = (b, hari) => b.tarikh <= hari && hari <= tarikhTamatEf(b); // adakah tempahan meliputi hari ini?
 const paparTarikh = (b) => (b.tarikhTamat && b.tarikhTamat !== b.tarikh)
@@ -141,6 +155,7 @@ const pemanduAktif   = () => drivers.filter(d => d.status !== "dipadam");
 
 function fmtTarikh(iso){
   const bln = ["Jan","Feb","Mac","Apr","Mei","Jun","Jul","Ogo","Sep","Okt","Nov","Dis"];
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) return "—"; // tarikh kosong/tidak sah (cth. rekod diimport)
   const [y,m,d] = iso.split("-");
   return `${parseInt(d)} ${bln[parseInt(m)-1]} ${y}`;
 }
@@ -205,10 +220,11 @@ function renderNav(){
     {id:"selenggara", label:"🔧 Selenggaraan", admin:true},
     {id:"laporan", label:"📈 Laporan Bulanan", admin:true},
     {id:"pengguna", label:"🔐 Pengguna", admin:true},
+    {id:"penolakan", label:"🚫 Tugasan Ditolak", admin:true},
     {id:"log", label:"📜 Log Audit", admin:true},
   ];
   const items = currentUser.peranan === "pemandu"
-    ? [{id:"tugasan", label:"🚘 Tugasan Saya"}]
+    ? [{id:"tugasan", label:"🚘 Tugasan Saya"}, {id:"penolakan", label:"🚫 Tugasan Ditolak"}]
     : semua.filter(n => !n.admin || isAdmin());
   $("nav").innerHTML = items.map(n => `
     <button class="${tab===n.id?'active':''}" onclick="setTab('${n.id}')">
@@ -236,6 +252,7 @@ function render(){
   if(tab === "selenggara") m.innerHTML = renderSelenggara();
   if(tab === "laporan") m.innerHTML = renderLaporan();
   if(tab === "pengguna") m.innerHTML = renderPengguna();
+  if(tab === "penolakan") m.innerHTML = renderPenolakan();
   if(tab === "log") m.innerHTML = renderLog();
   if(tab === "tugasan") m.innerHTML = renderTugasan();
 }
@@ -439,9 +456,14 @@ function fmtMasaSelesai(s){
 function statusKenderaan(v){
   if(v.status === "selenggara") return "selenggara";
   const k = klNow(); const skrg = `${k.tarikh} ${k.masa}`;
-  const sibuk = bookings.some(b => b.vehicleId === v.id && b.status === "diluluskan"
-    && mulaDT(b) <= skrg && skrg <= tamatDT(b));
-  return sibuk ? "dalam_perjalanan" : "tersedia";
+  const tugas = bookings.find(b => b.vehicleId === v.id && b.status === "diluluskan"
+    && mulaSibuk(b) <= skrg && skrg <= tamatDT(b));
+  if(!tugas) return "tersedia";
+  /* Pemandu belum menekan "Terima Tugas" — perjalanan tidak dianggap bermula walaupun
+     masanya sudah tiba. Tanda MERAH supaya admin tahu tugasan ini perlu tindakan. */
+  if(!tugas.diterima) return "belum_disahkan";
+  // Dalam tempoh bersedia (sebelum masa bertolak) vs benar-benar di atas jalan
+  return skrg < mulaDT(tugas) ? "menunggu_perjalanan" : "dalam_perjalanan";
 }
 
 function closeModal(){ $("modal-root").innerHTML = ""; }

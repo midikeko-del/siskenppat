@@ -9,8 +9,16 @@ function kadTugasan(t, butang){
         <div class="who">${esc(t.pemohon || "")}${t.bahagian ? " — " + esc(t.bahagian) : ""}</div>
         ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}</div>` : ""}
         ${t.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(t.masaSelesai)}</div>` : ""}
+        ${t.status === "diluluskan" ? (t.diterima
+          ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Tugasan diterima pada ${fmtMasaSelesai(t.diterima)} — kenderaan ditanda tidak tersedia ${MINIT_SEDIA} minit sebelum bertolak.</div>`
+          : `<div class="who" style="color:var(--amber-d);margin-top:6px">⏳ Menunggu pengesahan anda — sila tekan "Terima Tugas".</div>`) : ""}
       </div>
-      ${butang ? `<div><button class="btn btn-green" style="flex:none" onclick="siapTugas('${t.id}')">✔ Tandakan Selesai</button></div>` : ""}
+      ${butang ? (t.diterima
+        ? `<div><button class="btn btn-green" style="flex:none" onclick="siapTugas('${t.id}')">✔ Tandakan Selesai</button></div>`
+        : `<div style="display:flex;flex-direction:column;gap:8px;align-self:flex-start">
+             <button class="btn btn-green" style="flex:none" onclick="terimaTugas('${t.id}')">✔ Terima Tugas</button>
+             <button class="btn btn-red" style="flex:none" onclick="askTolakTugas('${t.id}')">✕ Tolak</button>
+           </div>`) : ""}
     </div>`;
 }
 
@@ -143,13 +151,77 @@ async function tukarStatusSaya(){
   notify(baru === "bertugas" ? "Status anda kini: Bertugas." : "Status anda kini: Cuti.");
 }
 
+/* ============================================================
+   TERIMA / TOLAK TUGASAN (pemandu)
+   ============================================================ */
+async function terimaTugas(id){
+  const t = bookings.find(b => b.id === id);
+  if(!t) return;
+  if(!apiAktif() || !TOKEN){
+    t.diterima = skrgStr(); render(); notify(`Tugasan ${id} diterima (mod tempatan).`); return;
+  }
+  setSync("saving");
+  try{
+    const res = await api("bookingAccept", { id });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){ setSync("err"); notify(res.ralat || "Gagal menerima tugasan.", "err"); return; }
+    Object.assign(t, res.booking);
+    setSync("ok"); render();
+    notify(`Tugasan ${id} diterima. Kenderaan ditanda tidak tersedia ${MINIT_SEDIA} minit sebelum bertolak.`);
+  }catch(e){ setSync("err"); notify("Gagal menghubungi pelayan.", "err"); }
+}
+
+function askTolakTugas(id){
+  const t = bookings.find(b => b.id === id);
+  if(!t) return;
+  $("modal-root").innerHTML = `
+  <div class="overlay">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-h"><h3>Tolak Tugasan ${t.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="summary"><b>${esc(t.destinasi)}</b><br><span class="muted">${paparTarikh(t)}, ${paparMasa(t)}</span></div>
+        <p class="muted" style="font-size:13px;line-height:1.6">Tempahan ini akan dikembalikan kepada admin sebagai <b>Menunggu Kelulusan</b> supaya kenderaan &amp; pemandu lain boleh ditugaskan. Sebab anda direkodkan dalam Log Audit.</p>
+        <label class="fld"><span>Sebab Menolak</span><input id="tk-sebab" maxlength="200" placeholder="cth: Cuti kecemasan / bertindih dengan tugasan lain" oninput="$('tk-ok').disabled = !this.value.trim()"></label>
+        <div id="tk-err"></div>
+        <button class="btn btn-red" id="tk-ok" style="justify-content:center" disabled onclick="hantarTolakTugas('${t.id}')">✕ Hantar Penolakan</button>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => { const el = $("tk-sebab"); if(el) el.focus(); }, 50);
+}
+
+async function hantarTolakTugas(id){
+  const sebab = $("tk-sebab").value.trim();
+  if(!sebab) return;
+  const btn = $("tk-ok"); btn.disabled = true; btn.textContent = "Menghantar…";
+  if(!apiAktif() || !TOKEN){
+    const t = bookings.find(b => b.id === id);
+    if(t){ t.status = "menunggu"; t.vehicleId = null; t.driverId = null; t.diterima = ""; }
+    closeModal(); render(); notify(`Tugasan ${id} ditolak (mod tempatan).`); return;
+  }
+  try{
+    const res = await api("bookingDecline", { id, sebab });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("tk-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal menolak tugasan.")}</span>`;
+      btn.disabled = false; btn.textContent = "✕ Hantar Penolakan"; return;
+    }
+    if(res.data) pakaiData(res.data);
+    closeModal(); render();
+    notify(`Tugasan ${id} ditolak dan dikembalikan kepada admin. Sebab direkod dalam tab "Tugasan Ditolak".`);
+  }catch(e){
+    $("tk-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false; btn.textContent = "✕ Hantar Penolakan";
+  }
+}
+
 /* Borang selesai tugasan — pemandu WAJIB kemas kini odometer, bahan api & lokasi */
 function siapTugas(id){
   const t = bookings.find(b => b.id === id);
   const v = veh(t.vehicleId);
   const odoMin = v ? v.odometer : 0;
   $("modal-root").innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="overlay">
     <div class="modal" style="max-width:480px">
       <div class="modal-h"><h3>Selesai Tugasan ${t.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">

@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS tempahan (
   userId       VARCHAR(50)  NULL,
   masaSelesai  VARCHAR(20)  NOT NULL DEFAULT '',
   tarikhTamat  VARCHAR(10)  NOT NULL DEFAULT '',
+  -- Masa pemandu menekan "Terima Tugas" (kosong = belum diterima)
+  diterima     VARCHAR(20)  NOT NULL DEFAULT '',
   KEY idx_status (status),
   KEY idx_vehicle (vehicleId),
   KEY idx_driver (driverId),
@@ -97,6 +99,21 @@ CREATE TABLE IF NOT EXISTS keselamatan (
   userId        VARCHAR(50) NOT NULL PRIMARY KEY,
   gagal         INT         NOT NULL DEFAULT 0,
   kunciSehingga BIGINT      NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Penolakan tugasan oleh pemandu --------------------------------------
+-- Rekod kekal walaupun tempahan diluluskan semula kemudian, supaya admin
+-- dan pemandu boleh merujuk sebab penolakan pada bila-bila masa.
+CREATE TABLE IF NOT EXISTS penolakan (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  tempahanId  VARCHAR(20)  NOT NULL DEFAULT '',
+  driverId    VARCHAR(20)  NOT NULL DEFAULT '',
+  userId      VARCHAR(50)  NOT NULL DEFAULT '',
+  vehicleId   VARCHAR(20)  NOT NULL DEFAULT '',
+  masa        VARCHAR(20)  NOT NULL DEFAULT '',
+  sebab       VARCHAR(200) NOT NULL DEFAULT '',
+  KEY idx_driver (driverId),
+  KEY idx_tempahan (tempahanId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Log (jejak audit) ----------------------------------------------------
