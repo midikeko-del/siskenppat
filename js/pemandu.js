@@ -1,6 +1,7 @@
 /* SisKEN — pemandu.js (edit di sini) */
 /* ---------- JADUAL PEMANDU ---------- */
-function mingguNav(delta){ mingguOffset += delta; render(); }
+/* Minggu lama mungkin di luar julat data yang dimuat — minta daripada pelayan dahulu */
+async function mingguNav(delta){ mingguOffset += delta; await pastikanData(mingguUntuk(mingguOffset)[0]); render(); }
 function mingguIni(){ mingguOffset = 0; render(); }
 
 function renderPemandu(){

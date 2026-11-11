@@ -86,6 +86,12 @@ let selFilter = "semua";
 let tempahanFilter = "semua";  // penapis menu Tempahan (admin & pemohon): semua|menunggu|diluluskan|selesai|ditolak|dibatalkan
 let tempahanCari = "";         // teks carian menu Tempahan
 let tempahanPage = 1;          // muka surat semasa menu Tempahan
+let tempahanDari = "", tempahanHingga = "";   // penapis julat tarikh menu Tempahan ("" = lalai)
+let tugasanDari = "", tugasanHingga = "";     // penapis julat tarikh menu Tugasan Saya
+/* Tarikh paling awal bagi rekod sejarah yang telah dimuat daripada pelayan. Pelayan
+   hanya menghantar tempahan aktif + rekod sejak tarikh ini (lalai 90 hari lalu);
+   pastikanData() memintanya lebih awal apabila pengguna memilih julat/bulan lama. */
+let dataDari = null;
 let tugasanFilter = "aktif";   // penapis menu Tugasan Saya (pemandu): aktif|selesai|semua
 let tugasanCari = "";          // teks carian menu Tugasan Saya
 let tugasanPage = 1;           // muka surat semasa menu Tugasan Saya
@@ -387,7 +393,7 @@ async function api(action, payload = {}){
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" }, // elak isu CORS preflight
-    body: JSON.stringify({ action, token: TOKEN, ...payload }),
+    body: JSON.stringify({ action, token: TOKEN, dari: dataDari || undefined, ...payload }),
   });
   return await r.json();
 }
@@ -411,6 +417,7 @@ function pakaiData(d){
   bookings = d.bookings || [];
   maintenance = d.maintenance || [];
   if(d.users) users = d.users;
+  if(d.dari) dataDari = d.dari;
   /* Data yang datang daripada tindakan pengguna sendiri tidak perlu beri amaran —
      rakam keadaan terus. Hanya segarData() yang membandingkan dan memberi amaran. */
   if(!_sedangSegar && currentUser) jejakTempahan = ambilJejak();
@@ -532,13 +539,66 @@ async function segarData(){
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") segarData(); });
 
 /* ============================================================
+   JULAT TARIKH — muat rekod lama atas permintaan + penapis tarikh
+   ============================================================ */
+/* Pastikan rekod sejak `dari` sudah dimuat. Tiada apa dibuat jika sudah ada. */
+async function pastikanData(dari){
+  if(!apiAktif() || !TOKEN || !dari || (dataDari && dari >= dataDari)) return;
+  while(_segarBerjalan) await new Promise(r => setTimeout(r, 100)); // tunggu semakan berkala selesai
+  const lama = dataDari;
+  _segarBerjalan = true; dataDari = dari; setSync("loading");
+  try{
+    const res = await api("load");
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(res.ok && res.data){ pakaiData(res.data); setSync("ok"); }
+    else { dataDari = lama; setSync("err"); }
+  }catch(e){
+    dataDari = lama; setSync("err");
+    notify("Gagal memuatkan rekod lama daripada pelayan.", "err");
+  }finally{ _segarBerjalan = false; }
+}
+
+/* Adakah tempahan bertindih dengan julat [dari, hingga]? Kosong = tiada had. */
+const dalamJulat = (b, dari, hingga) =>
+  (!dari || tarikhTamatEf(b) >= dari) && (!hingga || b.tarikh <= hingga);
+
+/* Kawalan penapis tarikh (dikongsi oleh menu Tempahan & Tugasan Saya) */
+function julatTarikhHTML(jenis, dari, hingga){
+  const aktif = dari || hingga;
+  return `
+    <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px">
+      <span class="muted">📆 Tarikh dari</span>
+      <input type="date" aria-label="Dari tarikh" style="width:auto" value="${dari}" ${hingga ? `max="${hingga}"` : ""} onchange="setJulat('${jenis}','dari',this.value)">
+      <span class="muted">hingga</span>
+      <input type="date" aria-label="Hingga tarikh" style="width:auto" value="${hingga}" ${dari ? `min="${dari}"` : ""} onchange="setJulat('${jenis}','hingga',this.value)">
+      ${aktif ? `<button class="btn btn-dark" style="padding:6px 12px;font-size:13px" onclick="setJulat('${jenis}','reset')">✕ Set Semula</button>` : ""}
+      ${!aktif && dataDari ? `<span class="muted" style="font-size:12px">Lalai: semua yang aktif + rekod sejak ${fmtTarikh(dataDari)}. Pilih tarikh untuk rekod lebih lama.</span>` : ""}
+    </div>`;
+}
+
+async function setJulat(jenis, medan, v){
+  const t = jenis === "tugasan";
+  let dari = t ? tugasanDari : tempahanDari, hingga = t ? tugasanHingga : tempahanHingga;
+  if(medan === "reset"){ dari = ""; hingga = ""; }
+  else if(medan === "dari") dari = v;
+  else hingga = v;
+  /* "Hingga" sahaja pada tarikh lama → isi "Dari" setahun sebelumnya supaya julat ada sempadan */
+  if(!dari && hingga && dataDari && hingga < dataDari) dari = tambahHari(hingga, -365);
+  if(dari && hingga && hingga < dari) hingga = dari;
+  if(t){ tugasanDari = dari; tugasanHingga = hingga; tugasanPage = 1; }
+  else { tempahanDari = dari; tempahanHingga = hingga; tempahanPage = 1; }
+  if(dari) await pastikanData(dari);
+  render();
+}
+
+/* ============================================================
    SKRIN LOG MASUK
    ============================================================ */
 function renderLogin(){
   $("login-root").innerHTML = `
   <div class="login-bg">
     <div class="login-card">
-      <img class="login-logo-ppat" src="logo-ppat.png?v=32" alt="Logo Perbadanan Perpustakaan Awam Terengganu">
+      <img class="login-logo-ppat" src="logo-ppat.png?v=34" alt="Logo Perbadanan Perpustakaan Awam Terengganu">
       <div class="login-logo">🚐</div>
       <h2>SisKEN</h2>
       <p class="login-sub">Sistem Tempahan Kenderaan<br>PERBADANAN PERPUSTAKAAN AWAM TERENGGANU</p>
@@ -680,6 +740,7 @@ function sesiTamat(){
   hentiSemakBerkala();
   buangSesi();
   TOKEN = null; currentUser = null; users = [];
+  dataDari = null; tempahanDari = tempahanHingga = tugasanDari = tugasanHingga = "";
   $("u-nama").textContent = "—";
   $("u-peranan").textContent = "Belum log masuk";
   $("u-avatar").textContent = "?";
@@ -696,6 +757,7 @@ async function doLogout(){
   hentiSemakBerkala();
   buangSesi();
   TOKEN = null; currentUser = null; users = [];
+  dataDari = null; tempahanDari = tempahanHingga = tugasanDari = tugasanHingga = "";
   $("u-nama").textContent = "—";
   $("u-peranan").textContent = "Belum log masuk";
   $("u-avatar").textContent = "?";

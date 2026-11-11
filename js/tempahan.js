@@ -46,7 +46,7 @@ function tempahanTersenarai(semuaSaya){
 function tempahanSenaraiHTML(semuaSaya){
   const senarai = tempahanTersenarai(semuaSaya);
   if(senarai.length === 0){
-    return `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">${semuaSaya.length === 0 ? 'Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.' : "Tiada tempahan sepadan."}</div>`;
+    return `<div class="card" style="padding:36px;text-align:center;color:var(--slate-l)">${semuaSaya.length === 0 && !tempahanDari && !tempahanHingga ? 'Tiada tempahan lagi. Klik "＋ Tempahan Baharu" untuk memohon kenderaan.' : "Tiada tempahan sepadan."}</div>`;
   }
   // Hadkan muka surat SEBELUM potong senarai (senarai boleh mengecil selepas lulus/tolak/selesai)
   tempahanPage = Math.min(Math.max(1, tempahanPage), Math.ceil(senarai.length / SAIZ_HALAMAN));
@@ -74,7 +74,8 @@ function tempahanPagerHTML(semuaSaya){
 }
 
 function renderTempahan(){
-  const semuaSaya = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  const semuaSaya = (isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId))
+    .filter(b => dalamJulat(b, tempahanDari, tempahanHingga));
   const kiraan = {
     semua: semuaSaya.length,
     menunggu: semuaSaya.filter(b => b.status === "menunggu").length,
@@ -96,12 +97,14 @@ function renderTempahan(){
       </div>
       <input id="tp-cari" type="text" value="${esc(tempahanCari)}" placeholder="🔍 Cari ID, pemohon, destinasi, tujuan…" style="width:auto;min-width:240px" oninput="onTempahanCari(this.value)">
     </div>
+    ${julatTarikhHTML("tempahan", tempahanDari, tempahanHingga)}
     <div id="tp-cards">${tempahanSenaraiHTML(semuaSaya)}</div>
     <div id="tp-pager">${tempahanPagerHTML(semuaSaya)}</div>`;
 }
 
 function segarTempahanSenarai(){
-  const semuaSaya = isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId);
+  const semuaSaya = (isAdmin() ? bookings : bookings.filter(b => b.userId === currentUser.userId))
+    .filter(b => dalamJulat(b, tempahanDari, tempahanHingga));
   $("tp-cards").innerHTML = tempahanSenaraiHTML(semuaSaya);
   $("tp-pager").innerHTML = tempahanPagerHTML(semuaSaya);
 }

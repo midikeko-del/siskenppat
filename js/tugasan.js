@@ -78,7 +78,8 @@ function renderTugasan(){
       Akaun anda belum dipautkan kepada mana-mana rekod pemandu.<br>Sila hubungi admin untuk memautkan akaun ini kepada rekod pemandu anda.
     </div></div>`;
 
-  const semuaTugasan = bookings.filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"));
+  const semuaTugasan = bookings.filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"))
+    .filter(b => dalamJulat(b, tugasanDari, tugasanHingga));
   const kiraan = {
     aktif: semuaTugasan.filter(b => b.status === "diluluskan").length,
     selesai: semuaTugasan.filter(b => b.status === "selesai").length,
@@ -110,13 +111,15 @@ function renderTugasan(){
       </div>
       <input id="tg-cari" type="text" value="${esc(tugasanCari)}" placeholder="🔍 Cari ID, destinasi, tujuan…" style="width:auto;min-width:240px" oninput="onTugasanCari(this.value)">
     </div>
+    ${julatTarikhHTML("tugasan", tugasanDari, tugasanHingga)}
     <div id="tg-cards">${tugasanSenaraiHTML(semuaTugasan)}</div>
     <div id="tg-pager">${tugasanPagerHTML(semuaTugasan)}</div>`;
 }
 
 function segarTugasanSenarai(){
   const me = currentUser.driverId;
-  const semuaTugasan = bookings.filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"));
+  const semuaTugasan = bookings.filter(b => b.driverId === me && (b.status === "diluluskan" || b.status === "selesai"))
+    .filter(b => dalamJulat(b, tugasanDari, tugasanHingga));
   $("tg-cards").innerHTML = tugasanSenaraiHTML(semuaTugasan);
   $("tg-pager").innerHTML = tugasanPagerHTML(semuaTugasan);
 }

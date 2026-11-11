@@ -66,6 +66,51 @@ function readTetapan(): array {
     $rows = db()->query("SELECT * FROM tetapan")->fetchAll();
     return array_map(fn($r) => castRow($r, ["value"]), $rows);
 }
+/* ============================================================
+   JULAT TARIKH TEMPAHAN
+   App tidak lagi menerima SEMUA tempahan setiap kali memuat data — hanya:
+     (a) tempahan yang masih aktif (menunggu / diluluskan), tanpa mengira tarikh, dan
+     (b) rekod lain (selesai / ditolak / dibatalkan) yang berakhir pada atau selepas
+         tarikh "dari".
+   Lalai "dari" = HARI_SEJARAH hari lalu. Pelayar boleh meminta tarikh yang lebih
+   awal (penapis tarikh, laporan bulan lama) melalui medan "dari" dalam permintaan.
+   ============================================================ */
+const HARI_SEJARAH = 90;
+$DARI = null;
+function dariLalai_(): string {
+    $d = new DateTime("now", new DateTimeZone(TZ));
+    $d->modify("-" . HARI_SEJARAH . " days");
+    return $d->format("Y-m-d");
+}
+function dariSemasa_(): string { return $GLOBALS["DARI"] ?? dariLalai_(); }
+
+const SQL_TAMAT_EF = "(CASE WHEN tarikhTamat <> '' THEN tarikhTamat ELSE tarikh END)";
+function castTempahan_(array $rows): array {
+    return array_map(fn($r) => castRow($r, ["penumpang"], [], ["vehicleId", "driverId", "userId"]), $rows);
+}
+/** Tempahan untuk app: aktif + rekod sejak $dari. Bukan admin: tempahan sendiri / tugasan sendiri sahaja. */
+function readTempahanJulat_(string $dari, array $user): array {
+    $sql = "SELECT * FROM tempahan WHERE (status IN ('menunggu','diluluskan') OR " . SQL_TAMAT_EF . " >= :d)";
+    $params = [":d" => $dari];
+    if ($user["peranan"] !== "admin") {
+        $sql .= " AND (userId = :u OR (:ada = 1 AND driverId = :drv))";
+        $params += [":u" => $user["userId"], ":ada" => empty($user["driverId"]) ? 0 : 1, ":drv" => (string) ($user["driverId"] ?? "")];
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return castTempahan_($stmt->fetchAll());
+}
+/** Tempahan untuk paparan umum: diluluskan (semua) + selesai dalam tempoh lalai */
+function readTempahanAwam_(): array {
+    $stmt = db()->prepare("SELECT * FROM tempahan WHERE status = 'diluluskan' OR (status = 'selesai' AND " . SQL_TAMAT_EF . " >= :d)");
+    $stmt->execute([":d" => dariLalai_()]);
+    return castTempahan_($stmt->fetchAll());
+}
+/** Tempahan diluluskan sahaja — untuk semakan pertindihan jadual */
+function readTempahanDiluluskan_(): array {
+    return castTempahan_(db()->query("SELECT * FROM tempahan WHERE status = 'diluluskan'")->fetchAll());
+}
+
 /** 200 rekod log terkini (terbaru dahulu) */
 function readLogTerkini(): array {
     return db()->query("SELECT masa, userId, tindakan, tempahanId, butiran FROM log ORDER BY id DESC LIMIT 200")->fetchAll();
@@ -111,7 +156,8 @@ function bukaSesi_(string $userId): string {
 /* ---------- Bina payload data untuk app ---------- */
 function buildData_(array $user): array {
     $isAdmin = $user["peranan"] === "admin";
-    $bookings = readTempahan();
+    $dari = dariSemasa_();
+    $bookings = readTempahanJulat_($dari, $user);
     $drivers = readPemandu();
     $vehicles = readKenderaan();
     $maintenance = readSelenggaraan();
@@ -142,6 +188,7 @@ function buildData_(array $user): array {
         "bookings" => $bookings,
         "maintenance" => $maintenance,
         "counters" => [],
+        "dari" => $dari,   // tarikh paling awal bagi rekod bukan-aktif dalam balasan ini
     ];
     foreach (readTetapan() as $r) $out["counters"][$r["key"]] = (int) $r["value"];
     if ($isAdmin) {
@@ -156,7 +203,7 @@ function buildData_(array $user): array {
 
 /* ---------- Data untuk paparan umum (disanitasi) ---------- */
 function dataAwam_(): array {
-    $bookings = array_values(array_filter(readTempahan(), fn($b) => $b["status"] === "diluluskan" || $b["status"] === "selesai"));
+    $bookings = readTempahanAwam_();
     $bookings = array_map(fn($b) => [
         "id" => $b["id"], "bahagian" => $b["bahagian"], "tujuan" => $b["tujuan"], "destinasi" => $b["destinasi"],
         "tarikh" => $b["tarikh"], "masaMula" => $b["masaMula"], "masaTamat" => $b["masaTamat"],
@@ -714,7 +761,7 @@ function semakTugasan_(array $b, string $vId, string $dId): ?string {
     }
     if ((int) $v["kapasiti"] < (int) $b["penumpang"]) return "Kapasiti kenderaan tidak mencukupi.";
 
-    $konflik = array_values(array_filter(readTempahan(), fn($x) =>
+    $konflik = array_values(array_filter(readTempahanDiluluskan_(), fn($x) =>
         $x["id"] !== $b["id"] && $x["status"] === "diluluskan" && bertindih_($x, $b) && ($x["vehicleId"] === $vId || $x["driverId"] === $dId)
     ));
     if (!empty($konflik))
@@ -864,7 +911,7 @@ function bookingEdit_(array $user, array $d): array {
     if ($calon["tarikhTamat"] && $calon["tarikhTamat"] < $calon["tarikh"]) return ["ok" => false, "ralat" => "Tarikh tamat mesti pada atau selepas tarikh mula."];
 
     if ($b["status"] === "diluluskan" && (!empty($b["vehicleId"]) || !empty($b["driverId"]))) {
-        $semua = readTempahan();
+        $semua = readTempahanDiluluskan_();
         $konflik = array_values(array_filter($semua, fn($x) =>
             $x["id"] !== $b["id"] && $x["status"] === "diluluskan" && bertindih_($x, $calon) &&
             ($x["vehicleId"] === $b["vehicleId"] || $x["driverId"] === $b["driverId"])
@@ -1092,6 +1139,11 @@ function handle(): array {
     if (!is_array($d)) return ["ok" => false, "ralat" => "Data permintaan tidak sah."];
 
     $action = $d["action"] ?? "";
+
+    /* Julat tarikh yang diminta pelayar — hanya boleh LEBIH AWAL daripada lalai */
+    $dari = (string) ($d["dari"] ?? "");
+    $lalai = dariLalai_();
+    $GLOBALS["DARI"] = (tarikhSah_($dari) && $dari < $lalai) ? $dari : $lalai;
 
     if ($action === "login") return login_($d);
     if ($action === "awam") return ["ok" => true, "data" => dataAwam_()];
