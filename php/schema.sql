@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS tempahan (
   masaMula     VARCHAR(5)   NOT NULL DEFAULT '',
   masaTamat    VARCHAR(5)   NOT NULL DEFAULT '',
   penumpang    INT          NOT NULL DEFAULT 1,
+  -- menunggu | diluluskan | selesai | ditolak (oleh admin) | dibatalkan (oleh pemohon)
   status       VARCHAR(30)  NOT NULL DEFAULT 'menunggu',
   vehicleId    VARCHAR(20)  NULL,
   driverId     VARCHAR(20)  NULL,
@@ -52,6 +53,8 @@ CREATE TABLE IF NOT EXISTS tempahan (
   diterima     VARCHAR(20)  NOT NULL DEFAULT '',
   -- No. telefon untuk dihubungi bagi perjalanan ini (pemandu <-> pemohon)
   telefonPemohon VARCHAR(30) NOT NULL DEFAULT '',
+  -- Sebab admin menolak tempahan (dipaparkan kepada pemohon)
+  sebabTolak   VARCHAR(200) NOT NULL DEFAULT '',
   KEY idx_status (status),
   KEY idx_vehicle (vehicleId),
   KEY idx_driver (driverId),

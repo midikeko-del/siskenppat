@@ -69,8 +69,8 @@ function openSelForm(id){
           <label class="fld"><span>Tarikh</span><input type="date" id="s-tarikh" value="${s?s.tarikh:HARI_INI}" oninput="checkSelForm()"></label>
           <label class="fld"><span>Jenis Kerja</span><select id="s-jenis">${jOpts}</select></label>
         </div>
-        <label class="fld"><span>Butiran Kerja</span><input id="s-butiran" value="${s?esc(s.butiran):""}" placeholder="cth: Servis 50,000 km — tukar minyak enjin & penapis" oninput="checkSelForm()"></label>
-        <label class="fld"><span>Bengkel / Pembekal</span><input id="s-bengkel" value="${s?esc(s.bengkel):""}" placeholder="cth: Pusat Servis Toyota, Cheras" oninput="checkSelForm()"></label>
+        <label class="fld"><span>Butiran Kerja</span><input id="s-butiran" maxlength="2000" value="${s?esc(s.butiran):""}" placeholder="cth: Servis 50,000 km — tukar minyak enjin & penapis" oninput="checkSelForm()"></label>
+        <label class="fld"><span>Bengkel / Pembekal</span><input id="s-bengkel" maxlength="150" value="${s?esc(s.bengkel):""}" placeholder="cth: Pusat Servis Toyota, Cheras" oninput="checkSelForm()"></label>
         <div class="row2">
           <label class="fld"><span>Kos (RM)</span><input type="number" id="s-kos" value="${s?s.kos:0}" min="0" step="0.01"></label>
           <label class="fld"><span>Odometer (km)</span><input type="number" id="s-odo" value="${s?s.odometer:""}" min="0"></label>

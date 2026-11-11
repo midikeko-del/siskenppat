@@ -83,7 +83,7 @@ let nextDrv = 5;
 let nextSel = 6;
 let rptBulan = HARI_INI.slice(0, 7); // bulan semasa
 let selFilter = "semua";
-let tempahanFilter = "semua";  // penapis menu Tempahan (admin & pemohon): semua|menunggu|diluluskan|selesai|ditolak
+let tempahanFilter = "semua";  // penapis menu Tempahan (admin & pemohon): semua|menunggu|diluluskan|selesai|ditolak|dibatalkan
 let tempahanCari = "";         // teks carian menu Tempahan
 let tempahanPage = 1;          // muka surat semasa menu Tempahan
 let tugasanFilter = "aktif";   // penapis menu Tugasan Saya (pemandu): aktif|selesai|semua
@@ -109,6 +109,7 @@ const BSTATUS = {
   diluluskan:{label:"Diluluskan", cls:"green"},
   ditolak:{label:"Ditolak", cls:"red"},
   selesai:{label:"Selesai", cls:"gray"},
+  dibatalkan:{label:"Dibatalkan", cls:"gray"},
 };
 const SSTATUS = {
   dijadual:{label:"Dijadualkan", cls:"amber"},
@@ -488,7 +489,7 @@ function semakPerubahan(){
     } else {
       if(lama && lama.status === "menunggu"){
         if(b.status === "diluluskan") mesej.push(`Tempahan ${b.id} telah diluluskan.`);
-        if(b.status === "ditolak")    mesej.push(`Tempahan ${b.id} telah ditolak.`);
+        if(b.status === "ditolak")    mesej.push(`Tempahan ${b.id} telah ditolak${b.sebabTolak ? ` — ${b.sebabTolak}` : ""}.`);
       }
     }
   }
@@ -537,7 +538,7 @@ function renderLogin(){
   $("login-root").innerHTML = `
   <div class="login-bg">
     <div class="login-card">
-      <img class="login-logo-ppat" src="logo-ppat.png?v=30" alt="Logo Perbadanan Perpustakaan Awam Terengganu">
+      <img class="login-logo-ppat" src="logo-ppat.png?v=32" alt="Logo Perbadanan Perpustakaan Awam Terengganu">
       <div class="login-logo">🚐</div>
       <h2>SisKEN</h2>
       <p class="login-sub">Sistem Tempahan Kenderaan<br>PERBADANAN PERPUSTAKAAN AWAM TERENGGANU</p>
@@ -563,6 +564,7 @@ async function doLogin(){
   const btn = $("lg-ok"); btn.disabled = true; btn.textContent = "Menyemak…";
   try{
     const res = await api("login", { userId: id, password: pw });
+    if(!res.ok && res.wajibTukar){ renderWajibTukar(id, pw, res.ralat); return; }
     if(!res.ok){
       $("lg-err").innerHTML = `<span class="err">${esc(res.ralat || "Log masuk gagal.")}</span>`;
       btn.disabled = false; btn.textContent = "Log Masuk"; return;
@@ -577,6 +579,55 @@ async function doLogin(){
   }catch(e){
     $("lg-err").innerHTML = '<span class="err">Tidak dapat menghubungi pelayan. Semak API_URL dan sambungan rangkaian.</span>';
     btn.disabled = false; btn.textContent = "Log Masuk";
+  }
+}
+
+/* ============================================================
+   KATA LALUAN LALAI — pelayan enggan membuka sesi selagi akaun masih guna
+   kata laluan pemasangan. Pengguna mesti menetapkan kata laluan baharu di
+   sini; ia dihantar bersama permintaan log masuk yang sama.
+   ============================================================ */
+let _lgLalai = null; // { id, pw } — disimpan dalam memori sahaja semasa borang ini dibuka
+function renderWajibTukar(id, pw, mesej){
+  _lgLalai = { id, pw };
+  $("login-root").innerHTML = `
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">🔑</div>
+      <h2>Tetapkan Kata Laluan Baharu</h2>
+      <div class="login-note">⚠️ ${esc(mesej || "Akaun ini masih menggunakan kata laluan lalai.")}</div>
+      <label class="fld"><span>Kata Laluan Baharu</span><input id="lg-pw1" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')hantarWajibTukar()"></label>
+      <label class="fld"><span>Ulang Kata Laluan Baharu</span><input id="lg-pw2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')hantarWajibTukar()"></label>
+      <div id="lg-err"></div>
+      <button class="btn btn-amber" id="lg-ok" style="justify-content:center;width:100%" onclick="hantarWajibTukar()">Simpan & Log Masuk</button>
+      <button class="btn" style="justify-content:center;width:100%;color:var(--slate)" onclick="_lgLalai=null;renderLogin()">‹ Batal</button>
+    </div>
+  </div>`;
+  setTimeout(() => { const el = $("lg-pw1"); if(el) el.focus(); }, 50);
+}
+
+async function hantarWajibTukar(){
+  if(!_lgLalai) return;
+  const p1 = $("lg-pw1").value, p2 = $("lg-pw2").value;
+  const ralat = (m) => { $("lg-err").innerHTML = `<span class="err">${esc(m)}</span>`; };
+  if(p1.length < 6) return ralat("Kata laluan baharu mestilah sekurang-kurangnya 6 aksara.");
+  if(p1 !== p2) return ralat("Kedua-dua kata laluan tidak sepadan.");
+  if(p1 === _lgLalai.pw) return ralat("Kata laluan baharu mesti berbeza daripada kata laluan lalai.");
+  const btn = $("lg-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+  try{
+    const res = await api("login", { userId: _lgLalai.id, password: _lgLalai.pw, passwordBaru: p1 });
+    if(!res.ok){ ralat(res.ralat || "Gagal menetapkan kata laluan."); btn.disabled = false; btn.textContent = "Simpan & Log Masuk"; return; }
+    _lgLalai = null;
+    TOKEN = res.token;
+    simpanSesi(res.token);
+    currentUser = res.user;
+    if(res.data) pakaiData(res.data);
+    masukApp();
+    setSync("ok");
+    notify("Kata laluan baharu disimpan.");
+  }catch(e){
+    ralat("Tidak dapat menghubungi pelayan.");
+    btn.disabled = false; btn.textContent = "Simpan & Log Masuk";
   }
 }
 

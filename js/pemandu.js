@@ -85,10 +85,10 @@ function openDrvForm(id){
     <div class="modal">
       <div class="modal-h"><h3>Edit Pemandu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
-        <label class="fld"><span>Nama Penuh</span><input id="d-nama" value="${esc(d.nama)}" placeholder="cth: En. Ahmad bin Ali" oninput="checkDrvForm()"></label>
+        <label class="fld"><span>Nama Penuh</span><input id="d-nama" maxlength="100" value="${esc(d.nama)}" placeholder="cth: En. Ahmad bin Ali" oninput="checkDrvForm()"></label>
         <div class="row2">
-          <label class="fld"><span>No. Telefon</span><input id="d-tel" value="${esc(d.telefon)}" placeholder="cth: 012-345 6789" oninput="checkDrvForm()"></label>
-          <label class="fld"><span>Kelas Lesen</span><input id="d-lesen" value="${esc(d.lesen)}" placeholder="cth: D, E, GDL" oninput="checkDrvForm()"></label>
+          <label class="fld"><span>No. Telefon</span><input id="d-tel" maxlength="30" value="${esc(d.telefon)}" placeholder="cth: 012-345 6789" oninput="checkDrvForm()"></label>
+          <label class="fld"><span>Kelas Lesen</span><input id="d-lesen" maxlength="30" value="${esc(d.lesen)}" placeholder="cth: D, E, GDL" oninput="checkDrvForm()"></label>
         </div>
         <label class="fld"><span>Status</span>
           <select id="d-status">
@@ -125,7 +125,7 @@ function askDelDriver(id){
   const aktif = bookings.filter(b => b.driverId === id && b.status === "diluluskan");
   if(aktif.length){
     confirmModal("Tidak Boleh Dipadam",
-      `Pemandu <b>${esc(d.nama)}</b> mempunyai ${aktif.length} tugasan aktif (${aktif.map(a=>a.id).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
+      `Pemandu <b>${esc(d.nama)}</b> mempunyai ${aktif.length} tugasan belum selesai (${aktif.map(a=>a.id).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
       null);
     return;
   }

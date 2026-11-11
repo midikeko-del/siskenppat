@@ -259,8 +259,23 @@ function login_(array $d): array {
     }
 
     if ($rec) tulisCubaan_($kunci, 0, 0);
-    // Naik taraf hash legasi (SHA-256) kepada password_hash() secara automatik semasa log masuk berjaya
-    if (perluNaikTaraf_($u)) setKataLaluan_($u["userId"], $password);
+
+    /* Kata laluan lalai pemasangan (install.php) tidak boleh kekal: tiada sesi dibuka
+       sehingga pengguna menghantar kata laluan baharu bersama permintaan log masuk. */
+    if ($password === PW_LALAI) {
+        $baru = (string) ($d["passwordBaru"] ?? "");
+        if ($baru === "")
+            return ["ok" => false, "wajibTukar" => true,
+                    "ralat" => "Akaun ini masih menggunakan kata laluan lalai. Sila tetapkan kata laluan baharu untuk meneruskan."];
+        if ($ralat = semakPwBaru_($baru)) return ["ok" => false, "wajibTukar" => true, "ralat" => $ralat];
+        setKataLaluan_($u["userId"], $baru);
+        db()->prepare("DELETE FROM sesi WHERE userId = :u")->execute([":u" => $u["userId"]]);
+        logAudit_($u["userId"], "Tukar Kata Laluan Lalai", "", "");
+        $u["salt"] = ""; $u["passwordHash"] = ""; $password = $baru; // sudah disimpan — langkau naik taraf di bawah
+    } elseif (perluNaikTaraf_($u)) {
+        // Naik taraf hash legasi (SHA-256) kepada password_hash() secara automatik semasa log masuk berjaya
+        setKataLaluan_($u["userId"], $password);
+    }
     $user = ["userId" => $u["userId"], "nama" => $u["nama"], "peranan" => $u["peranan"],
              "driverId" => $u["driverId"] ?: null, "superadmin" => (int) ($u["superadmin"] ?? 0) === 1];
     logAudit_($u["userId"], "Log Masuk", "", "");
@@ -305,8 +320,11 @@ function vehicleSave_(array $user, array $d): array {
     $v["bahanApi"] = max(0, min(100, (int) $v["bahanApi"]));
 
     if ($v["plat"] === "" || $v["model"] === "") return ["ok" => false, "ralat" => "No. pendaftaran dan model wajib diisi."];
-    if ((int) $v["kapasiti"] < 1) return ["ok" => false, "ralat" => "Kapasiti mesti sekurang-kurangnya 1."];
-    if ((int) $v["odometer"] < 0) return ["ok" => false, "ralat" => "Odometer tidak sah."];
+    if ($ralat = semakPanjang_($v, ["plat" => [20, "No. pendaftaran"], "model" => [100, "Model"], "jenis" => [50, "Jenis kenderaan"],
+                                    "lokasi" => [150, "Lokasi"], "roadtax" => [20, "Tarikh cukai jalan"]]))
+        return ["ok" => false, "ralat" => $ralat];
+    if ((int) $v["kapasiti"] < 1 || (int) $v["kapasiti"] > MAX_PENUMPANG) return ["ok" => false, "ralat" => "Kapasiti mesti antara 1 dan " . MAX_PENUMPANG . "."];
+    if ((int) $v["odometer"] < 0 || (int) $v["odometer"] > MAX_ODOMETER) return ["ok" => false, "ralat" => "Odometer tidak sah."];
     if (!in_array($v["status"], ["tersedia", "selenggara", "dipadam"], true)) $v["status"] = "tersedia";
 
     $dup = db()->prepare("SELECT id FROM kenderaan WHERE UPPER(plat) = :p AND id <> :id");
@@ -315,7 +333,7 @@ function vehicleSave_(array $user, array $d): array {
 
     if ($v["status"] === "dipadam" && ($lama["status"] ?? "") !== "dipadam") {
         $aktif = adaTempahanAktif_("vehicleId", $id);
-        if ($aktif) return ["ok" => false, "ralat" => "Kenderaan mempunyai tempahan aktif (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
+        if ($aktif) return ["ok" => false, "ralat" => "Kenderaan mempunyai tempahan belum selesai (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
     }
 
     $params = [":plat" => $v["plat"], ":model" => $v["model"], ":jenis" => $v["jenis"], ":kap" => (int) $v["kapasiti"],
@@ -344,11 +362,13 @@ function driverSave_(array $user, array $d): array {
     foreach (["nama", "telefon", "lesen", "status"] as $k)
         if (array_key_exists($k, $in)) $p[$k] = trim((string) $in[$k]);
     if ($p["nama"] === "" || $p["telefon"] === "" || $p["lesen"] === "") return ["ok" => false, "ralat" => "Nama, no. telefon dan kelas lesen wajib diisi."];
+    if ($ralat = semakPanjang_($p, ["nama" => [100, "Nama"], "telefon" => [30, "No. telefon"], "lesen" => [30, "Kelas lesen"]]))
+        return ["ok" => false, "ralat" => $ralat];
     if (!in_array($p["status"], ["bertugas", "cuti", "dipadam"], true)) $p["status"] = "bertugas";
 
     if ($p["status"] === "dipadam" && $lama["status"] !== "dipadam") {
         $aktif = adaTempahanAktif_("driverId", $id);
-        if ($aktif) return ["ok" => false, "ralat" => "Pemandu mempunyai tugasan aktif (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
+        if ($aktif) return ["ok" => false, "ralat" => "Pemandu mempunyai tugasan belum selesai (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
     }
 
     db()->prepare("UPDATE pemandu SET nama=:n, telefon=:t, lesen=:l, status=:s WHERE id=:id")
@@ -379,6 +399,10 @@ function maintSave_(array $user, array $d): array {
     ];
     if (!$s["tarikh"] || !$s["butiran"] || !$s["bengkel"]) return ["ok" => false, "ralat" => "Tarikh, butiran kerja dan bengkel wajib diisi."];
     if (!tarikhSah_($s["tarikh"])) return ["ok" => false, "ralat" => "Tarikh selenggaraan tidak sah."];
+    if ($ralat = semakPanjang_($s, ["jenis" => [50, "Jenis selenggaraan"], "butiran" => [2000, "Butiran kerja"], "bengkel" => [150, "Nama bengkel"]]))
+        return ["ok" => false, "ralat" => $ralat];
+    if ($s["kos"] > 99999999.99) return ["ok" => false, "ralat" => "Kos tidak sah."];
+    if ($s["odometer"] > MAX_ODOMETER) return ["ok" => false, "ralat" => "Odometer tidak sah."];
     if (!ambilRekod_("kenderaan", $s["vehicleId"])) return ["ok" => false, "ralat" => "Kenderaan tidak dijumpai."];
 
     $params = [":v" => $s["vehicleId"], ":t" => $s["tarikh"], ":j" => $s["jenis"], ":b" => $s["butiran"], ":k" => $s["kos"],
@@ -508,6 +532,9 @@ function bookingAdd_(array $user, array $b): array {
         return ["ok" => false, "ralat" => "Maklumat tempahan tidak lengkap."];
     if ($rec["telefonPemohon"] === "") return ["ok" => false, "ralat" => "No. telefon untuk dihubungi wajib diisi."];
     if (!telefonSah_($rec["telefonPemohon"])) return ["ok" => false, "ralat" => "No. telefon tidak sah."];
+    if ($ralat = semakPanjang_($rec, ["pemohon" => [150, "Nama pemohon"], "bahagian" => [150, "Bahagian"],
+                                       "tujuan" => [255, "Tujuan"], "destinasi" => [255, "Destinasi"]])) return ["ok" => false, "ralat" => $ralat];
+    if ($rec["penumpang"] > MAX_PENUMPANG) return ["ok" => false, "ralat" => "Bilangan penumpang tidak sah."];
     if ($ralat = semakMasaTempahan_($rec)) return ["ok" => false, "ralat" => $ralat];
     $now = nowKL_(); $hariIni = substr($now, 0, 10); $masaIni = substr($now, 11, 5);
     if ($rec["tarikh"] < $hariIni) return ["ok" => false, "ralat" => "Tarikh tempahan tidak boleh pada masa lampau."];
@@ -566,12 +593,14 @@ function bookingComplete_(array $user, array $d): array {
             $v = castRow($v, ["kapasiti", "odometer", "bahanApi"]);
             if ($adaOdo) {
                 $odoBaru = (float) $d["odometer"];
+                if (is_numeric($d["odometer"]) && $odoBaru > MAX_ODOMETER) return ["ok" => false, "ralat" => "Bacaan odometer tidak sah."];
                 if (!is_numeric($d["odometer"]) || $odoBaru < (float) $v["odometer"])
                     return ["ok" => false, "ralat" => "Odometer tidak boleh kurang daripada bacaan semasa (" . number_format((float) $v["odometer"]) . " km)."];
                 $v["odometer"] = (int) $odoBaru;
             }
             if ($adaApi) $v["bahanApi"] = max(0, min(100, (int) $d["bahanApi"]));
             if ($adaLok) $v["lokasi"] = trim((string) $d["lokasi"]);
+            if ($ralat = semakPanjang_($v, ["lokasi" => [150, "Lokasi kenderaan"]])) return ["ok" => false, "ralat" => $ralat];
             db()->prepare("UPDATE kenderaan SET odometer=:o, bahanApi=:a, lokasi=:l WHERE id=:id")
                 ->execute([":o" => $v["odometer"], ":a" => $v["bahanApi"], ":l" => $v["lokasi"], ":id" => $v["id"]]);
             $vehicleOut = $v;
@@ -758,15 +787,44 @@ function bookingReject_(array $user, array $d): array {
     $b = ambilTempahan_((string) ($d["id"] ?? ""));
     if (!$b) return ["ok" => false, "ralat" => "Tempahan tidak dijumpai."];
     if ($b["status"] !== "menunggu") return ["ok" => false, "ralat" => "Hanya tempahan menunggu boleh ditolak."];
-    $b["status"] = "ditolak";
-    db()->prepare("UPDATE tempahan SET status=:s WHERE id=:id")->execute([":s" => "ditolak", ":id" => $b["id"]]);
-    logAudit_($user["userId"], "Tolak", $b["id"], "");
+    /* Sebab wajib — pemohon melihatnya pada tempahan supaya tahu kenapa ia ditolak */
+    $sebab = trim((string) ($d["sebab"] ?? ""));
+    if ($sebab === "") return ["ok" => false, "ralat" => "Sila nyatakan sebab tempahan ditolak."];
+    if ($ralat = semakPanjang_(["sebab" => $sebab], ["sebab" => [200, "Sebab penolakan"]])) return ["ok" => false, "ralat" => $ralat];
+    $b["status"] = "ditolak"; $b["sebabTolak"] = $sebab;
+    db()->prepare("UPDATE tempahan SET status='ditolak', sebabTolak=:s WHERE id=:id")->execute([":s" => $sebab, ":id" => $b["id"]]);
+    logAudit_($user["userId"], "Tolak", $b["id"], $sebab);
     return ["ok" => true, "booking" => $b];
 }
 
-/* ---------- Edit tempahan (admin) — hanya sebelum tempahan bermula ---------- */
+/* ---------- Pemilik tempahan: adakah tempahan ini dibuat oleh pengguna ini? ---------- */
+function pemilikTempahan_(array $user, array $b): bool {
+    return !empty($b["userId"]) && $b["userId"] === $user["userId"];
+}
+
+/* ---------- Pemohon batalkan tempahan sendiri — hanya SEBELUM admin meluluskannya ----------
+   Rekod dikekalkan dengan status "dibatalkan" (jejak audit & laporan), bukan dipadam. */
+function bookingCancel_(array $user, array $d): array {
+    $b = ambilTempahan_((string) ($d["id"] ?? ""));
+    if (!$b || !pemilikTempahan_($user, $b)) return ["ok" => false, "ralat" => "Tempahan tidak dijumpai."];
+    if ($b["status"] !== "menunggu")
+        return ["ok" => false, "ralat" => "Hanya tempahan yang masih menunggu kelulusan boleh dibatalkan. Sila hubungi admin."];
+    $b["status"] = "dibatalkan";
+    db()->prepare("UPDATE tempahan SET status='dibatalkan' WHERE id=:id")->execute([":id" => $b["id"]]);
+    logAudit_($user["userId"], "Batal Tempahan", $b["id"], $b["destinasi"]);
+    return ["ok" => true, "booking" => $b];
+}
+
+/* ---------- Edit tempahan — hanya sebelum tempahan bermula ----------
+   Admin: tempahan menunggu atau diluluskan.
+   Pemohon: tempahan SENDIRI sahaja, dan hanya selagi masih menunggu kelulusan. */
 function bookingEdit_(array $user, array $d): array {
     $b = ambilTempahan_((string) ($d["id"] ?? ""));
+    if ($user["peranan"] !== "admin") {
+        if (!$b || !pemilikTempahan_($user, $b)) return ["ok" => false, "ralat" => "Tempahan tidak dijumpai."];
+        if ($b["status"] !== "menunggu")
+            return ["ok" => false, "ralat" => "Hanya tempahan yang masih menunggu kelulusan boleh diubah. Sila hubungi admin."];
+    }
     if (!$b) return ["ok" => false, "ralat" => "Tempahan tidak dijumpai."];
     if ($b["status"] !== "menunggu" && $b["status"] !== "diluluskan")
         return ["ok" => false, "ralat" => "Hanya tempahan menunggu atau diluluskan boleh diedit."];
@@ -795,6 +853,9 @@ function bookingEdit_(array $user, array $d): array {
         return ["ok" => false, "ralat" => "Maklumat tempahan tidak lengkap."];
     if ($calon["telefonPemohon"] === "") return ["ok" => false, "ralat" => "No. telefon untuk dihubungi wajib diisi."];
     if (!telefonSah_($calon["telefonPemohon"])) return ["ok" => false, "ralat" => "No. telefon tidak sah."];
+    if ($ralat = semakPanjang_($calon, ["pemohon" => [150, "Nama pemohon"], "bahagian" => [150, "Bahagian"],
+                                       "tujuan" => [255, "Tujuan"], "destinasi" => [255, "Destinasi"]])) return ["ok" => false, "ralat" => $ralat];
+    if ($calon["penumpang"] > MAX_PENUMPANG) return ["ok" => false, "ralat" => "Bilangan penumpang tidak sah."];
     if ($ralat = semakMasaTempahan_($calon)) return ["ok" => false, "ralat" => $ralat];
 
     $hariIni = substr($now, 0, 10); $masaIni = substr($now, 11, 5);
@@ -850,7 +911,7 @@ function tukarPw_(array $user, array $d): array {
         return ["ok" => false, "ralat" => "Kata laluan semasa salah."];
     }
     $baru = (string) ($d["passwordBaru"] ?? "");
-    if (strlen($baru) < 6) return ["ok" => false, "ralat" => "Kata laluan baharu mestilah sekurang-kurangnya 6 aksara."];
+    if ($ralat = semakPwBaru_($baru)) return ["ok" => false, "ralat" => $ralat];
     setKataLaluan_($user["userId"], $baru);
     $token = (string) ($d["token"] ?? "");
     db()->prepare("DELETE FROM sesi WHERE userId = :u AND token <> :t")->execute([":u" => $user["userId"], ":t" => $token]);
@@ -887,7 +948,9 @@ function userAdd_(array $d, array $user): array {
         return ["ok" => false, "ralat" => "Hanya superadmin boleh mencipta akaun admin."];
     if (!preg_match('/^[A-Za-z0-9._-]{3,50}$/', $userId))
         return ["ok" => false, "ralat" => "ID pengguna hanya boleh mengandungi huruf, nombor, titik, sengkang dan garis bawah (3–50 aksara, tanpa ruang)."];
-    if (strlen((string) $d["password"]) < 6) return ["ok" => false, "ralat" => "Kata laluan mestilah sekurang-kurangnya 6 aksara."];
+    if ($ralat = semakPwBaru_((string) $d["password"])) return ["ok" => false, "ralat" => $ralat];
+    if ($ralat = semakPanjang_($d, ["nama" => [100, "Nama"], "telefon" => [30, "No. telefon"], "lesen" => [30, "Kelas lesen"]]))
+        return ["ok" => false, "ralat" => $ralat];
     $stmt = db()->prepare("SELECT userId FROM pengguna WHERE LOWER(userId) = LOWER(:u)");
     $stmt->execute([":u" => $userId]);
     if ($stmt->fetch()) return ["ok" => false, "ralat" => "ID pengguna ini sudah wujud."];
@@ -945,7 +1008,7 @@ function userReset_(array $d, array $user): array {
     if ($userId !== $user["userId"] && akaunDilindungi_($sasaran) && !isSuper_($user))
         return ["ok" => false, "ralat" => "Hanya superadmin boleh menetapkan semula kata laluan akaun admin."];
     $pw = (string) ($d["password"] ?? "");
-    if (strlen($pw) < 6) return ["ok" => false, "ralat" => "Kata laluan mestilah sekurang-kurangnya 6 aksara."];
+    if ($ralat = semakPwBaru_($pw)) return ["ok" => false, "ralat" => $ralat];
     setKataLaluan_($userId, $pw);
     $token = (string) ($d["token"] ?? "");
     db()->prepare("DELETE FROM sesi WHERE userId = :u AND token <> :t")->execute([":u" => $userId, ":t" => $token]);
@@ -962,6 +1025,12 @@ function userDel_(array $user, array $d): array {
         return ["ok" => false, "ralat" => "Hanya superadmin boleh memadam akaun admin."];
     if ((int) ($sasaran["superadmin"] ?? 0) === 1 && bilSuperadmin_($userId) === 0)
         return ["ok" => false, "ralat" => "Mesti ada sekurang-kurangnya seorang superadmin."];
+    /* Akaun pemandu yang masih ada tugasan belum selesai tidak boleh dipadam —
+       jika tidak, tiada sesiapa boleh menerima/menyelesaikan tugasan itu. */
+    if (!empty($sasaran["driverId"])) {
+        $aktif = adaTempahanAktif_("driverId", (string) $sasaran["driverId"]);
+        if ($aktif) return ["ok" => false, "ralat" => "Pemandu ini mempunyai tugasan belum selesai (" . implode(", ", $aktif) . ") — selesaikan atau tugaskan semula dahulu."];
+    }
     $admins = (int) $pdo->query("SELECT COUNT(*) FROM pengguna WHERE peranan='admin' AND userId <> " . $pdo->quote($userId))->fetchColumn();
     if ($admins === 0) return ["ok" => false, "ralat" => "Mesti ada sekurang-kurangnya seorang admin."];
     $pdo->prepare("DELETE FROM pengguna WHERE userId = :u")->execute([":u" => $userId]);
@@ -1044,7 +1113,8 @@ function handle(): array {
         case "bookingDecline": return bookingDecline_($user, $d);
         case "bookingApprove": return adminSahaja_($user) ?? bookingApprove_($user, $d);
         case "bookingReject": return adminSahaja_($user) ?? bookingReject_($user, $d);
-        case "bookingEdit": return adminSahaja_($user) ?? bookingEdit_($user, $d);
+        case "bookingEdit": return bookingEdit_($user, $d);   // kebenaran (admin / pemilik) disemak di dalam
+        case "bookingCancel": return bookingCancel_($user, $d);
         case "bookingUnassign": return adminSahaja_($user) ?? bookingUnassign_($user, $d);
         case "bookingReassign": return adminSahaja_($user) ?? bookingReassign_($user, $d);
         case "auditLog": return adminSahaja_($user) ?? ["ok" => true, "log" => readLogTerkini()];

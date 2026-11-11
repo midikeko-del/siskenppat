@@ -231,7 +231,7 @@ function siapTugas(id){
           <label class="fld"><span>Odometer (km)</span><input type="number" id="sp-odo" value="${v ? v.odometer : ""}" min="${odoMin}" oninput="checkSiap(${odoMin})"></label>
           <label class="fld"><span>Bahan Api (%)</span><input type="number" id="sp-fuel" value="${v ? v.bahanApi : ""}" min="0" max="100" oninput="checkSiap(${odoMin})"></label>
         </div>
-        <label class="fld"><span>Lokasi Semasa Kenderaan</span><input id="sp-lok" value="${v ? esc(v.lokasi) : ""}" placeholder="cth: Garaj Utama, Aras B1" oninput="checkSiap(${odoMin})"></label>
+        <label class="fld"><span>Lokasi Semasa Kenderaan</span><input id="sp-lok" maxlength="150" value="${v ? esc(v.lokasi) : ""}" placeholder="cth: Garaj Utama, Aras B1" oninput="checkSiap(${odoMin})"></label>
         <div id="sp-err"></div>
         <button class="btn btn-green" id="sp-ok" style="justify-content:center" onclick="hantarSiap('${t.id}')">✔ Selesai & Kemas Kini Kenderaan</button>
       </div>

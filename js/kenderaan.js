@@ -63,8 +63,8 @@ function openVehForm(id){
       <div class="modal-h"><h3>${v ? "Edit Kenderaan — " + esc(v.plat) : "Tambah Kenderaan Baharu"}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
         <div class="row2">
-          <label class="fld"><span>No. Pendaftaran (Plat)</span><input id="v-plat" value="${v?esc(v.plat):""}" placeholder="cth: WXY 1234" oninput="checkVehForm()"></label>
-          <label class="fld"><span>Model</span><input id="v-model" value="${v?esc(v.model):""}" placeholder="cth: Toyota Hiace" oninput="checkVehForm()"></label>
+          <label class="fld"><span>No. Pendaftaran (Plat)</span><input id="v-plat" maxlength="20" value="${v?esc(v.plat):""}" placeholder="cth: WXY 1234" oninput="checkVehForm()"></label>
+          <label class="fld"><span>Model</span><input id="v-model" maxlength="100" value="${v?esc(v.model):""}" placeholder="cth: Toyota Hiace" oninput="checkVehForm()"></label>
         </div>
         <div class="row2">
           <label class="fld"><span>Jenis</span>
@@ -92,7 +92,7 @@ function openVehForm(id){
             </select>
           </label>
         </div>
-        <label class="fld"><span>Lokasi Semasa</span><input id="v-lokasi" value="${v?esc(v.lokasi):"Garaj Utama, Aras B1"}"></label>
+        <label class="fld"><span>Lokasi Semasa</span><input id="v-lokasi" maxlength="150" value="${v?esc(v.lokasi):"Garaj Utama, Aras B1"}"></label>
         <div id="v-err"></div>
         <button class="btn btn-amber" id="v-ok" style="justify-content:center" onclick="submitVeh(${v?`'${v.id}'`:"null"})">
           ${v ? "Simpan Perubahan" : "Tambah Kenderaan"}
@@ -135,7 +135,7 @@ function askDelVehicle(id){
   const aktif = bookings.filter(b => b.vehicleId === id && b.status === "diluluskan");
   if(aktif.length){
     confirmModal("Tidak Boleh Dipadam",
-      `Kenderaan <b>${esc(v.plat)}</b> mempunyai ${aktif.length} tempahan aktif yang diluluskan (${aktif.map(a=>a.id).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
+      `Kenderaan <b>${esc(v.plat)}</b> mempunyai ${aktif.length} tempahan belum selesai (${aktif.map(a=>a.id).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
       null);
     return;
   }

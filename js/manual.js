@@ -19,6 +19,7 @@ const MANUAL_PEMOHON = [
   { t: "Perjalanan lebih daripada sehari", d: "Isikan medan <b>Tarikh Tamat</b>. Kenderaan dan pemandu akan ditempah untuk keseluruhan tempoh tersebut." },
   { t: "Tempahan tidak boleh pada masa lampau", d: "Tarikh dan masa mula mestilah pada masa akan datang. Hantar permohonan seawal mungkin supaya pentadbir sempat menugaskan kenderaan dan pemandu." },
   { t: "Pemberitahuan", d: "Selagi app dibuka, sistem menyemak pelayan setiap minit. Anda akan menerima amaran apabila tempahan anda diluluskan atau ditolak, dan bilangan kemas kini baharu dipaparkan pada tajuk tab pelayar." },
+  { t: "Edit atau batalkan tempahan", d: "Selagi tempahan masih <b>Menunggu Kelulusan</b>, anda boleh menekan <b>✎ Edit</b> untuk membetulkan maklumatnya atau <b>✕ Batal</b> untuk membatalkannya. Setelah diluluskan, hubungi pentadbir sistem untuk sebarang perubahan." },
   { t: "Semak status tempahan anda", d: "Senarai di menu Tempahan memaparkan status setiap permohonan. Anda hanya melihat tempahan anda sendiri. Rujuk jadual status di bawah untuk maksud setiap status." },
   { t: "Cari tempahan lama", d: "Gunakan butang penapis status dan kotak carian di atas senarai. Carian meliputi nombor tempahan, destinasi dan tujuan." },
   { t: "Lupa kata laluan", d: "Hubungi pentadbir sistem untuk menetapkan semula kata laluan anda. Atas sebab keselamatan, kata laluan tidak boleh dilihat oleh sesiapa, termasuk pentadbir." },
@@ -49,7 +50,8 @@ function renderManual(){
     ["menunggu", "Permohonan telah dihantar dan sedang menunggu pentadbir menugaskan kenderaan serta pemandu."],
     ["diluluskan", "Kenderaan dan pemandu telah ditugaskan. Pemandu perlu menerima tugasan sebelum perjalanan dianggap disahkan."],
     ["selesai", "Perjalanan telah tamat dan pemandu telah mengemas kini keadaan kenderaan."],
-    ["ditolak", "Permohonan tidak diluluskan. Hubungi pentadbir sistem untuk penjelasan."],
+    ["ditolak", "Permohonan tidak diluluskan. Sebab penolakan dipaparkan pada tempahan berkenaan."],
+    ["dibatalkan", "Tempahan dibatalkan oleh pemohon sebelum diluluskan."],
   ].map(([k, d]) => `<tr><td style="white-space:nowrap">${chip(BSTATUS[k])}</td><td class="muted">${d}</td></tr>`).join("");
 
   return `

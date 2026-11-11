@@ -17,7 +17,13 @@ function kadTempahan(b){
             ? `<div class="who" style="color:var(--red);font-weight:600;margin-top:4px">⚠️ Pemandu belum terima tugasan walaupun masa perjalanan telah tiba — sila hubungi pemandu atau tarik balik tugasan.</div>`
             : `<div class="who" style="color:var(--amber-d);margin-top:4px">⏳ Menunggu pemandu terima tugasan</div>`)) : ""}
         ${b.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(b.masaSelesai)}</div>` : ""}
+        ${b.status === "ditolak" && b.sebabTolak ? `<div class="who" style="color:var(--red);margin-top:6px">✕ Sebab ditolak: ${esc(b.sebabTolak)}</div>` : ""}
       </div>
+      ${!isAdmin() && b.status === "menunggu" && currentUser && b.userId === currentUser.userId ? `
+      <div style="display:flex;flex-direction:column;gap:8px;align-self:flex-start">
+        <button class="btn btn-edit" onclick="openEditForm('${b.id}')">✎ Edit</button>
+        <button class="btn btn-red" onclick="askBatalTempahan('${b.id}')">✕ Batal</button>
+      </div>` : ""}
       ${isAdmin() && (b.status === "menunggu" || b.status === "diluluskan") ? `
       <div style="display:flex;flex-direction:column;gap:8px;align-self:flex-start">
         ${b.status === "menunggu" ? `<button class="btn btn-dark" onclick="openApprove('${b.id}')">Proses ›</button>` : ""}
@@ -75,6 +81,7 @@ function renderTempahan(){
     diluluskan: semuaSaya.filter(b => b.status === "diluluskan").length,
     selesai: semuaSaya.filter(b => b.status === "selesai").length,
     ditolak: semuaSaya.filter(b => b.status === "ditolak").length,
+    dibatalkan: semuaSaya.filter(b => b.status === "dibatalkan").length,
   };
   const penapis = (key, label) => `<button class="btn ${tempahanFilter===key?'btn-amber':'btn-dark'}" style="padding:6px 12px;font-size:13px" onclick="setTempahanFilter('${key}')">${label}${kiraan[key] ? ` (${kiraan[key]})` : ""}</button>`;
 
@@ -85,7 +92,7 @@ function renderTempahan(){
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${penapis("semua","Semua")}${penapis("menunggu","Menunggu")}${penapis("diluluskan","Diluluskan")}${penapis("selesai","Selesai")}${penapis("ditolak","Ditolak")}
+        ${penapis("semua","Semua")}${penapis("menunggu","Menunggu")}${penapis("diluluskan","Diluluskan")}${penapis("selesai","Selesai")}${penapis("ditolak","Ditolak")}${penapis("dibatalkan","Dibatalkan")}
       </div>
       <input id="tp-cari" type="text" value="${esc(tempahanCari)}" placeholder="🔍 Cari ID, pemohon, destinasi, tujuan…" style="width:auto;min-width:240px" oninput="onTempahanCari(this.value)">
     </div>
@@ -153,7 +160,7 @@ function openApprove(id){
         <div id="ap-clash"></div>
         <div class="btn-row">
           <button class="btn btn-green" id="ap-ok" disabled onclick="doApprove('${b.id}')">✔ Luluskan</button>
-          <button class="btn btn-red" onclick="doReject('${b.id}')">✕ Tolak</button>
+          <button class="btn btn-red" onclick="openTolak('${b.id}')">✕ Tolak</button>
         </div>
       </div>
     </div>
@@ -202,19 +209,82 @@ async function doApprove(id){
     btn.disabled = false; btn.textContent = "✔ Luluskan";
   }
 }
+/* ---------- Admin: tolak tempahan — sebab wajib, dipaparkan kepada pemohon ---------- */
+function openTolak(id){
+  const b = bookings.find(x => x.id === id);
+  if(!b) return;
+  $("modal-root").innerHTML = `
+  <div class="overlay">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-h"><h3>Tolak Tempahan ${b.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="summary">
+          <b>${esc(b.tujuan)}</b><br>
+          ${esc(b.destinasi)} · ${paparTarikh(b)}, ${paparMasa(b)}<br>
+          <span class="muted">${esc(b.pemohon)} — ${esc(b.bahagian)}</span>
+        </div>
+        <label class="fld"><span>Sebab Ditolak</span>
+          <input id="tl-sebab" maxlength="200" placeholder="cth: Tiada kenderaan tersedia pada tarikh tersebut" oninput="$('tl-ok').disabled = !this.value.trim()" onkeydown="if(event.key==='Enter' && this.value.trim())doReject('${b.id}')">
+        </label>
+        <p class="muted" style="font-size:12px;margin:-6px 0 12px">Pemohon akan melihat sebab ini pada tempahannya.</p>
+        <div id="tl-err"></div>
+        <div class="btn-row">
+          <button class="btn btn-red" id="tl-ok" disabled onclick="doReject('${b.id}')">✕ Tolak Tempahan</button>
+          <button class="btn btn-dark" onclick="openApprove('${b.id}')">‹ Kembali</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => { const el = $("tl-sebab"); if(el) el.focus(); }, 50);
+}
+
 async function doReject(id){
   const b = bookings.find(x => x.id === id);
+  const sebab = $("tl-sebab").value.trim();
+  if(!sebab) return;
   if(!apiAktif() || !TOKEN){
-    b.status = "ditolak"; closeModal(); render(); notify(`Tempahan ${id} ditolak (mod tempatan).`);
+    b.status = "ditolak"; b.sebabTolak = sebab; closeModal(); render(); notify(`Tempahan ${id} ditolak (mod tempatan).`);
     return;
   }
+  const btn = $("tl-ok"); btn.disabled = true;
   try{
-    const res = await api("bookingReject", { id });
+    const res = await api("bookingReject", { id, sebab });
     if(res.sesiTamat){ sesiTamat(); return; }
-    if(!res.ok){ notify(res.ralat || "Gagal menolak tempahan."); return; }
+    if(!res.ok){
+      $("tl-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal menolak tempahan.")}</span>`;
+      btn.disabled = false; return;
+    }
     Object.assign(b, res.booking);
     closeModal(); render(); notify(`Tempahan ${id} ditolak.`);
-  }catch(e){ notify("Gagal menghubungi pelayan."); }
+  }catch(e){
+    $("tl-err").innerHTML = '<span class="err">Gagal menghubungi pelayan.</span>';
+    btn.disabled = false;
+  }
+}
+
+/* ---------- Pemohon: batalkan tempahan sendiri (sebelum diluluskan) ---------- */
+function askBatalTempahan(id){
+  const b = bookings.find(x => x.id === id);
+  if(!b) return;
+  confirmModal("Batalkan Tempahan",
+    `Batalkan tempahan <b>${esc(b.id)}</b> — ${esc(b.tujuan)} (${paparTarikh(b)})?
+     <br><br>Tindakan ini tidak boleh diundur. Jika masih perlukan kenderaan, anda perlu menghantar tempahan baharu.`,
+    async () => {
+      closeModal();
+      if(!apiAktif() || !TOKEN){
+        b.status = "dibatalkan"; render(); notify(`Tempahan ${id} dibatalkan (mod tempatan).`);
+        return;
+      }
+      setSync("saving");
+      try{
+        const res = await api("bookingCancel", { id });
+        if(res.sesiTamat){ sesiTamat(); return; }
+        if(!res.ok){ setSync("ok"); await segarData(); render(); notify(res.ralat || "Gagal membatalkan tempahan.", "err"); return; }
+        Object.assign(b, res.booking);
+        jejakTempahan = ambilJejak();
+        setSync("ok"); render(); notify(`Tempahan ${id} dibatalkan.`);
+      }catch(e){ setSync("err"); render(); notify("Gagal menghubungi pelayan.", "err"); }
+    }, "✕ Ya, Batalkan", "btn-red");
 }
 
 /* ---------- Admin: tukar kenderaan / pemandu (sebelum perjalanan bermula) ---------- */
@@ -339,13 +409,13 @@ function openForm(){
       <div class="modal-h"><h3>Tempahan Baharu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
         <div class="row2">
-          <label class="fld"><span>Nama Pemohon</span><input id="f-pemohon" value="${currentUser ? esc(currentUser.nama) : ""}" placeholder="cth: Pn. Aishah Kamal" oninput="checkForm()"></label>
-          <label class="fld"><span>Bahagian / Unit</span><input id="f-bahagian" placeholder="cth: Bahagian Kewangan" oninput="checkForm()"></label>
+          <label class="fld"><span>Nama Pemohon</span><input id="f-pemohon" maxlength="150" value="${currentUser ? esc(currentUser.nama) : ""}" placeholder="cth: Pn. Aishah Kamal" oninput="checkForm()"></label>
+          <label class="fld"><span>Bahagian / Unit</span><input id="f-bahagian" maxlength="150" placeholder="cth: Bahagian Kewangan" oninput="checkForm()"></label>
         </div>
         <label class="fld"><span>No. Telefon Untuk Dihubungi</span><input id="f-tel" type="tel" maxlength="30" placeholder="cth: 012-345 6789" oninput="checkForm()"></label>
         <p class="muted" style="font-size:12px;margin:-6px 0 12px">Pemandu yang ditugaskan akan melihat nombor ini untuk menyelaras tempat dan masa berjumpa.</p>
-        <label class="fld"><span>Tujuan Perjalanan</span><input id="f-tujuan" placeholder="cth: Mesyuarat penyelarasan" oninput="checkForm()"></label>
-        <label class="fld"><span>Destinasi</span><input id="f-destinasi" placeholder="cth: Putrajaya, Presint 4" oninput="checkForm()"></label>
+        <label class="fld"><span>Tujuan Perjalanan</span><input id="f-tujuan" maxlength="255" placeholder="cth: Mesyuarat penyelarasan" oninput="checkForm()"></label>
+        <label class="fld"><span>Destinasi</span><input id="f-destinasi" maxlength="255" placeholder="cth: Putrajaya, Presint 4" oninput="checkForm()"></label>
         <div class="row2">
           <label class="fld"><span>Tarikh Mula</span><input type="date" id="f-tarikh" value="${HARI_INI}" min="${HARI_INI}" oninput="checkForm()"></label>
           <label class="fld"><span>Tarikh Tamat <span style="text-transform:none;font-weight:400">(pilihan — untuk tempahan lebih sehari)</span></span><input type="date" id="f-tkh2" min="${HARI_INI}" oninput="checkForm()"></label>
@@ -425,12 +495,18 @@ async function submitForm(){
   }
 }
 
-/* ---------- Modal: edit tempahan (admin sahaja) ----------
+/* ---------- Modal: edit tempahan ----------
+ * Admin: tempahan menunggu/diluluskan. Pemohon: tempahan sendiri yang masih
+ * menunggu kelulusan sahaja (pelayan menguatkuasakan peraturan yang sama).
  * Hanya boleh diedit SELAGI tempahan belum bermula. SOP sama dengan
  * permohonan baharu — tiada pertindihan jadual dibenarkan. */
 function openEditForm(id){
   const b = bookings.find(x => x.id === id);
   if(!b) return;
+  if(!isAdmin() && b.status !== "menunggu"){
+    notify("Tempahan ini telah diproses. Sila hubungi admin untuk sebarang perubahan.", "warn");
+    render(); return;
+  }
   /* Tempahan sudah bermula DAN disahkan pemandu → tiada perubahan dibenarkan.
      Jika pemandu belum sahkan, admin masih boleh membetulkan tempahan. */
   if(mulaDT(b) <= skrgStr() && b.diterima){
@@ -445,12 +521,12 @@ function openEditForm(id){
       <div class="modal-b">
         ${b.status === "diluluskan" && v ? `<div class="summary" style="margin-bottom:14px">Tugasan semasa: <b>${esc(v.plat)}</b> ${esc(v.model)}${d ? " — " + esc(d.nama) : ""}<br><span class="muted">Perubahan tarikh/masa mesti tiada pertindihan dengan tugasan kenderaan/pemandu ini.</span></div>` : ""}
         <div class="row2">
-          <label class="fld"><span>Nama Pemohon</span><input id="e-pemohon" value="${esc(b.pemohon)}" oninput="checkEditForm('${b.id}')"></label>
-          <label class="fld"><span>Bahagian / Unit</span><input id="e-bahagian" value="${esc(b.bahagian)}" oninput="checkEditForm('${b.id}')"></label>
+          <label class="fld"><span>Nama Pemohon</span><input id="e-pemohon" maxlength="150" value="${esc(b.pemohon)}" oninput="checkEditForm('${b.id}')"></label>
+          <label class="fld"><span>Bahagian / Unit</span><input id="e-bahagian" maxlength="150" value="${esc(b.bahagian)}" oninput="checkEditForm('${b.id}')"></label>
         </div>
         <label class="fld"><span>No. Telefon Untuk Dihubungi</span><input id="e-tel" type="tel" maxlength="30" value="${esc(b.telefonPemohon || "")}" placeholder="cth: 012-345 6789" oninput="checkEditForm('${b.id}')"></label>
-        <label class="fld"><span>Tujuan Perjalanan</span><input id="e-tujuan" value="${esc(b.tujuan)}" oninput="checkEditForm('${b.id}')"></label>
-        <label class="fld"><span>Destinasi</span><input id="e-destinasi" value="${esc(b.destinasi)}" oninput="checkEditForm('${b.id}')"></label>
+        <label class="fld"><span>Tujuan Perjalanan</span><input id="e-tujuan" maxlength="255" value="${esc(b.tujuan)}" oninput="checkEditForm('${b.id}')"></label>
+        <label class="fld"><span>Destinasi</span><input id="e-destinasi" maxlength="255" value="${esc(b.destinasi)}" oninput="checkEditForm('${b.id}')"></label>
         <div class="row2">
           <label class="fld"><span>Tarikh Mula</span><input type="date" id="e-tarikh" value="${b.tarikh}" min="${HARI_INI}" oninput="checkEditForm('${b.id}')"></label>
           <label class="fld"><span>Tarikh Tamat <span style="text-transform:none;font-weight:400">(pilihan)</span></span><input type="date" id="e-tkh2" value="${b.tarikhTamat || ""}" min="${HARI_INI}" oninput="checkEditForm('${b.id}')"></label>
@@ -540,7 +616,8 @@ async function submitEdit(id){
     if(res.sesiTamat){ sesiTamat(); return; }
     if(!res.ok){
       $("e-err").innerHTML = `<span class="err">${esc(res.ralat || "Gagal mengemas kini tempahan.")}</span>`;
-      btn.disabled = false; btn.textContent = "Simpan Perubahan"; return;
+      btn.disabled = false; btn.textContent = "Simpan Perubahan";
+      return;
     }
     Object.assign(b, res.booking);
     closeModal(); render(); notify(`Tempahan ${id} dikemas kini.`);

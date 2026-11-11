@@ -49,6 +49,34 @@ function masaSah_(string $s): bool {
     return (bool) preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $s);
 }
 
+/** Kata laluan lalai yang dicipta oleh install.php — TIDAK boleh kekal digunakan.
+    Log masuk dengan kata laluan ini memaksa pengguna menetapkan kata laluan baharu,
+    dan ia ditolak di semua tempat kata laluan ditetapkan. */
+const PW_LALAI = "admin123";
+
+/** Sahkan kata laluan BAHARU (pulang mesej ralat, atau null jika sah) */
+function semakPwBaru_(string $pw): ?string {
+    if (strlen($pw) < 6) return "Kata laluan mestilah sekurang-kurangnya 6 aksara.";
+    if ($pw === PW_LALAI) return "Kata laluan lalai tidak boleh digunakan. Sila pilih kata laluan lain.";
+    return null;
+}
+
+/** Semak had panjang medan teks supaya padan dengan lajur pangkalan data.
+    $had = ["medan" => [maksimum aksara, "Label untuk mesej"]]. Tanpa semakan ini,
+    MySQL mod strict menolak input panjang dengan ralat pelayan yang tidak jelas
+    (dan mod bukan-strict memotongnya secara senyap). Pulang mesej ralat atau null. */
+function semakPanjang_(array $nilai, array $had): ?string {
+    foreach ($had as $medan => [$maks, $label]) {
+        if (mb_strlen((string) ($nilai[$medan] ?? "")) > $maks)
+            return "{$label} terlalu panjang (maksimum {$maks} aksara).";
+    }
+    return null;
+}
+
+/** Had atas nombor bulat yang munasabah (lajur INT MySQL: 2,147,483,647) */
+const MAX_ODOMETER = 9999999;
+const MAX_PENUMPANG = 999;
+
 function saltBaru_(): string {
     // 12 aksara hex rawak
     return substr(bin2hex(random_bytes(8)), 0, 12);

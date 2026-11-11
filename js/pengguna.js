@@ -62,7 +62,7 @@ function openUserForm(){
       <div class="modal-h"><h3>Tambah Pengguna Baharu</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
       <div class="modal-b">
         <div class="row2">
-          <label class="fld"><span>ID Pengguna</span><input id="u-id" placeholder="cth: staf01" oninput="checkUserForm()"></label>
+          <label class="fld"><span>ID Pengguna</span><input id="u-id" maxlength="50" placeholder="cth: staf01" oninput="checkUserForm()"></label>
           <label class="fld"><span>Peranan</span>
             <select id="u-role" onchange="onTukarPeranan()">
               <option value="pemohon">Pemohon</option>
@@ -77,7 +77,7 @@ function openUserForm(){
             Jadikan superadmin — boleh urus akaun admin &amp; padam log audit
           </label>
         </div>` : ""}
-        <label class="fld"><span>Nama Penuh</span><input id="u-nm" placeholder="cth: En. Hafiz Rahman" oninput="checkUserForm()"></label>
+        <label class="fld"><span>Nama Penuh</span><input id="u-nm" maxlength="100" placeholder="cth: En. Hafiz Rahman" oninput="checkUserForm()"></label>
         <div id="u-drv-wrap" style="display:none">
           <label class="fld"><span>Rekod Pemandu</span>
             <select id="u-drv" onchange="pilihRekodPemandu()">
@@ -87,8 +87,8 @@ function openUserForm(){
           </label>
           <div id="u-drv-baru">
             <div class="row2">
-              <label class="fld"><span>No. Telefon</span><input id="u-drv-tel" placeholder="cth: 012-345 6789" oninput="checkUserForm()"></label>
-              <label class="fld"><span>Kelas Lesen</span><input id="u-drv-lesen" placeholder="cth: D, E, GDL" oninput="checkUserForm()"></label>
+              <label class="fld"><span>No. Telefon</span><input id="u-drv-tel" maxlength="30" placeholder="cth: 012-345 6789" oninput="checkUserForm()"></label>
+              <label class="fld"><span>Kelas Lesen</span><input id="u-drv-lesen" maxlength="30" placeholder="cth: D, E, GDL" oninput="checkUserForm()"></label>
             </div>
             <p class="muted" style="font-size:12px;margin:-6px 0 12px">Rekod pemandu baharu akan dicipta serentak dengan akaun ini.</p>
           </div>
@@ -211,6 +211,14 @@ async function submitResetPw(userId){
 
 function askDelUser(userId){
   const u = users.find(x => x.userId === userId);
+  /* Akaun pemandu dengan tugasan belum selesai tidak boleh dipadam (pelayan semak semula) */
+  const aktif = u.driverId ? bookings.filter(b => b.driverId === u.driverId && b.status === "diluluskan") : [];
+  if(aktif.length){
+    confirmModal("Tidak Boleh Dipadam",
+      `Pemandu <b>${esc(u.nama)}</b> mempunyai ${aktif.length} tugasan belum selesai (${aktif.map(a=>esc(a.id)).join(", ")}). Sila selesaikan atau tugaskan semula tempahan tersebut dahulu.`,
+      null);
+    return;
+  }
   confirmModal("Padam Pengguna",
     `Anda pasti mahu memadam akaun <b>${esc(u.nama)}</b> (${esc(u.userId)})? Pengguna ini tidak akan dapat log masuk lagi.`,
     async () => {
