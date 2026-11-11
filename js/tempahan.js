@@ -9,8 +9,8 @@ function kadTempahan(b){
         </div>
         <h4>${esc(b.tujuan)}</h4>
         <div class="meta">📍 ${esc(b.destinasi)} &nbsp;·&nbsp; ${paparTarikh(b)}, ${paparMasa(b)} &nbsp;·&nbsp; ${b.penumpang} penumpang</div>
-        <div class="who">Pemohon: ${esc(b.pemohon)} — ${esc(b.bahagian)}</div>
-        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}${d ? ` &nbsp;|&nbsp; ${esc(d.nama)}` : ""}</div>` : ""}
+        <div class="who">Pemohon: ${esc(b.pemohon)} — ${esc(b.bahagian)}${b.telefonPemohon ? ` &nbsp;·&nbsp; ${telPaut(b.telefonPemohon)}` : ""}</div>
+        ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}${d ? ` &nbsp;|&nbsp; ${esc(d.nama)}${d.telefon ? ` &nbsp;·&nbsp; ${telPaut(d.telefon)}` : ""}` : ""}</div>` : ""}
         ${b.status === "diluluskan" && b.driverId ? (b.diterima
           ? `<div class="who" style="color:var(--green);margin-top:4px">✔ Pemandu telah terima tugasan (${fmtMasaSelesai(b.diterima)})</div>`
           : (mulaDT(b) <= skrgStr()
@@ -22,6 +22,7 @@ function kadTempahan(b){
       <div style="display:flex;flex-direction:column;gap:8px;align-self:flex-start">
         ${b.status === "menunggu" ? `<button class="btn btn-dark" onclick="openApprove('${b.id}')">Proses ›</button>` : ""}
         <button class="btn btn-edit" onclick="openEditForm('${b.id}')">✎ Edit</button>
+        ${b.status === "diluluskan" && mulaDT(b) > skrgStr() ? `<button class="btn btn-dark" onclick="openTukarTugasan('${b.id}')">🔄 Tukar Tugasan</button>` : ""}
         ${b.status === "diluluskan" && !b.diterima ? `<button class="btn btn-red" onclick="askTarikBalik('${b.id}')">↩ Tarik Balik</button>` : ""}
       </div>` : ""}
     </div>`;
@@ -216,6 +217,92 @@ async function doReject(id){
   }catch(e){ notify("Gagal menghubungi pelayan."); }
 }
 
+/* ---------- Admin: tukar kenderaan / pemandu (sebelum perjalanan bermula) ---------- */
+function openTukarTugasan(id){
+  const b = bookings.find(x => x.id === id);
+  if(!b) return;
+  if(mulaDT(b) <= skrgStr()){
+    notify("Perjalanan telah bermula. Tiada pertukaran dibenarkan.", "warn");
+    return;
+  }
+  /* Kenderaan/pemandu semasa sentiasa boleh dipilih walaupun kini dalam selenggaraan
+     atau bercuti — ia sudah ditugaskan; admin perlu melihat keadaan sebenar. */
+  const vehOpts = kenderaanAktif()
+    .filter(v => v.status !== "selenggara" || v.id === b.vehicleId)
+    .map(v => `<option value="${v.id}" ${v.id===b.vehicleId?"selected":""} ${v.kapasiti < b.penumpang ? "disabled" : ""}>${esc(v.plat)} · ${esc(v.model)} (${v.kapasiti} tempat)${v.kapasiti < b.penumpang ? " — kapasiti tidak mencukupi" : ""}${v.status==="selenggara" ? " — dalam selenggaraan" : ""}</option>`).join("");
+  const drvOpts = pemanduAktif()
+    .map(d => `<option value="${d.id}" ${d.id===b.driverId?"selected":""} ${d.status==="cuti" && d.id!==b.driverId ? "disabled" : ""}>${esc(d.nama)}${d.status==="cuti" ? " — bercuti" : ""}</option>`).join("");
+
+  $("modal-root").innerHTML = `
+  <div class="overlay">
+    <div class="modal">
+      <div class="modal-h"><h3>Tukar Tugasan ${b.id}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">
+        <div class="summary">
+          <b>${esc(b.tujuan)}</b><br>
+          ${esc(b.destinasi)} · ${paparTarikh(b)}, ${paparMasa(b)} · ${b.penumpang} penumpang
+        </div>
+        <p class="muted" style="font-size:13px;line-height:1.6">Pertukaran akan <b>membatalkan pengesahan pemandu</b> — pemandu yang ditugaskan perlu menekan "Terima Tugas" semula untuk mengesahkan kenderaan dan tugasan terkini.</p>
+        <label class="fld"><span>Kenderaan</span>
+          <select id="tt-veh" onchange="checkTukarTugasan('${b.id}')">${vehOpts}</select>
+        </label>
+        <label class="fld"><span>Pemandu</span>
+          <select id="tt-drv" onchange="checkTukarTugasan('${b.id}')">${drvOpts}</select>
+        </label>
+        <div id="tt-clash"></div>
+        <button class="btn btn-amber" id="tt-ok" style="justify-content:center" onclick="hantarTukarTugasan('${b.id}')">🔄 Simpan Pertukaran</button>
+      </div>
+    </div>
+  </div>`;
+  checkTukarTugasan(id);
+}
+
+function checkTukarTugasan(id){
+  const b = bookings.find(x => x.id === id);
+  const vId = $("tt-veh").value, dId = $("tt-drv").value;
+  const box = $("tt-clash"), ok = $("tt-ok");
+  const samaSaja = vId === b.vehicleId && dId === b.driverId;
+  const cl = (vId && dId) ? conflicts(b, vId, dId) : [];
+  if(samaSaja){
+    box.innerHTML = `<div class="muted" style="font-size:13px;margin-bottom:10px">Tiada perubahan — pilih kenderaan atau pemandu yang berbeza.</div>`;
+    ok.disabled = true; return;
+  }
+  if(cl.length){
+    box.innerHTML = `<div class="clash"><b>⚠️ Konflik jadual dikesan:</b>${cl.map(c =>
+      `<p>• ${c.id} — ${esc(c.destinasi)}, ${paparMasa(c)}</p>`).join("")}</div>`;
+    ok.disabled = true; return;
+  }
+  box.innerHTML = "";
+  ok.disabled = !(vId && dId);
+}
+
+async function hantarTukarTugasan(id){
+  const b = bookings.find(x => x.id === id);
+  const vId = $("tt-veh").value, dId = $("tt-drv").value;
+  const btn = $("tt-ok"); btn.disabled = true; btn.textContent = "Menyimpan…";
+
+  if(!apiAktif() || !TOKEN){
+    b.vehicleId = vId; b.driverId = dId; b.diterima = "";
+    closeModal(); render(); notify(`Tugasan ${id} ditukar (mod tempatan).`);
+    return;
+  }
+  setSync("saving");
+  try{
+    const res = await api("bookingReassign", { id, vehicleId: vId, driverId: dId });
+    if(res.sesiTamat){ sesiTamat(); return; }
+    if(!res.ok){
+      $("tt-clash").innerHTML = `<div class="clash"><b>⚠️ ${esc(res.ralat || "Gagal menukar tugasan.")}</b></div>`;
+      btn.disabled = false; btn.textContent = "🔄 Simpan Pertukaran"; setSync("err"); return;
+    }
+    if(res.data) pakaiData(res.data); else Object.assign(b, res.booking);
+    setSync("ok"); closeModal(); render();
+    notify(`Tugasan ${id} ditukar. Pemandu perlu menerima semula tugasan ini.`);
+  }catch(e){
+    $("tt-clash").innerHTML = `<div class="clash"><b>Gagal menghubungi pelayan.</b></div>`;
+    btn.disabled = false; btn.textContent = "🔄 Simpan Pertukaran"; setSync("err");
+  }
+}
+
 /* ---------- Admin: tarik balik tugasan yang belum disahkan pemandu ---------- */
 function askTarikBalik(id){
   const b = bookings.find(x => x.id === id);
@@ -255,6 +342,8 @@ function openForm(){
           <label class="fld"><span>Nama Pemohon</span><input id="f-pemohon" value="${currentUser ? esc(currentUser.nama) : ""}" placeholder="cth: Pn. Aishah Kamal" oninput="checkForm()"></label>
           <label class="fld"><span>Bahagian / Unit</span><input id="f-bahagian" placeholder="cth: Bahagian Kewangan" oninput="checkForm()"></label>
         </div>
+        <label class="fld"><span>No. Telefon Untuk Dihubungi</span><input id="f-tel" type="tel" maxlength="30" placeholder="cth: 012-345 6789" oninput="checkForm()"></label>
+        <p class="muted" style="font-size:12px;margin:-6px 0 12px">Pemandu yang ditugaskan akan melihat nombor ini untuk menyelaras tempat dan masa berjumpa.</p>
         <label class="fld"><span>Tujuan Perjalanan</span><input id="f-tujuan" placeholder="cth: Mesyuarat penyelarasan" oninput="checkForm()"></label>
         <label class="fld"><span>Destinasi</span><input id="f-destinasi" placeholder="cth: Putrajaya, Presint 4" oninput="checkForm()"></label>
         <div class="row2">
@@ -282,11 +371,13 @@ function checkForm(){
   const k = klNow();                                    // tarikh + masa KL semasa
   const tidakLampau = !tkh || tkh > k.tarikh || (tkh === k.tarikh && (!mula || mula >= k.masa)); // tiada masa lampau
   const masaOK = !sehari || !tamat || mula < tamat;     // peraturan masa hanya untuk hari sama
-  const valid = $("f-pemohon").value.trim() && $("f-bahagian").value.trim() &&
+  const telOK = telefonSahJs($("f-tel").value);
+  const valid = $("f-pemohon").value.trim() && $("f-bahagian").value.trim() && telOK &&
                 $("f-tujuan").value.trim() && $("f-destinasi").value.trim() &&
                 tkh && mula && tarikhOK && masaOK && tidakLampau;
   let mesej = `<span class="muted">Masa tamat boleh dibiarkan kosong — ia direkodkan automatik apabila pemandu menanda Selesai. Untuk tempahan bermalam / lebih sehari, isi Tarikh Tamat.</span>`;
-  if(!tidakLampau) mesej = `<span class="err">Tarikh/masa tempahan tidak boleh pada masa lampau.</span>`;
+  if($("f-tel").value.trim() && !telOK) mesej = `<span class="err">No. telefon tidak sah — sekurang-kurangnya 7 digit.</span>`;
+  else if(!tidakLampau) mesej = `<span class="err">Tarikh/masa tempahan tidak boleh pada masa lampau.</span>`;
   else if(!tarikhOK) mesej = `<span class="err">Tarikh tamat mesti pada atau selepas tarikh mula.</span>`;
   else if(sehari && tamat && mula >= tamat) mesej = `<span class="err">Masa tamat mesti selepas masa mula.</span>`;
   $("f-err").innerHTML = mesej;
@@ -297,6 +388,7 @@ async function submitForm(){
   const booking = {
     pemohon: $("f-pemohon").value.trim(),
     bahagian: $("f-bahagian").value.trim(),
+    telefon: $("f-tel").value.trim(),
     tujuan: $("f-tujuan").value.trim(),
     destinasi: $("f-destinasi").value.trim(),
     tarikh: $("f-tarikh").value,
@@ -310,7 +402,8 @@ async function submitForm(){
   if(!apiAktif() || !TOKEN){
     const id = `T-${nextNum++}`;
     bookings.unshift({ id, status:"menunggu", vehicleId:null, driverId:null,
-      userId: currentUser ? currentUser.userId : null, masaSelesai:"", diterima:"", ...booking });
+      userId: currentUser ? currentUser.userId : null, masaSelesai:"", diterima:"",
+      ...booking, telefonPemohon: booking.telefon });
     closeModal(); render(); notify(`Tempahan ${id} dihantar (mod tempatan).`);
     return;
   }
@@ -355,6 +448,7 @@ function openEditForm(id){
           <label class="fld"><span>Nama Pemohon</span><input id="e-pemohon" value="${esc(b.pemohon)}" oninput="checkEditForm('${b.id}')"></label>
           <label class="fld"><span>Bahagian / Unit</span><input id="e-bahagian" value="${esc(b.bahagian)}" oninput="checkEditForm('${b.id}')"></label>
         </div>
+        <label class="fld"><span>No. Telefon Untuk Dihubungi</span><input id="e-tel" type="tel" maxlength="30" value="${esc(b.telefonPemohon || "")}" placeholder="cth: 012-345 6789" oninput="checkEditForm('${b.id}')"></label>
         <label class="fld"><span>Tujuan Perjalanan</span><input id="e-tujuan" value="${esc(b.tujuan)}" oninput="checkEditForm('${b.id}')"></label>
         <label class="fld"><span>Destinasi</span><input id="e-destinasi" value="${esc(b.destinasi)}" oninput="checkEditForm('${b.id}')"></label>
         <div class="row2">
@@ -384,7 +478,8 @@ function checkEditForm(id){
   const k = klNow();
   const tidakLampau = !tkh || tkh > k.tarikh || (tkh === k.tarikh && (!mula || mula >= k.masa));
   const masaOK = !sehari || !tamat || mula < tamat;
-  const isiOK = $("e-pemohon").value.trim() && $("e-bahagian").value.trim() &&
+  const telOK = telefonSahJs($("e-tel").value);
+  const isiOK = $("e-pemohon").value.trim() && $("e-bahagian").value.trim() && telOK &&
                 $("e-tujuan").value.trim() && $("e-destinasi").value.trim() && tkh && mula;
 
   /* Semakan pertindihan (hanya bermakna jika kenderaan/pemandu sudah ditugaskan) */
@@ -399,7 +494,8 @@ function checkEditForm(id){
     : "";
 
   let mesej = "";
-  if(!tidakLampau) mesej = `<span class="err">Tarikh/masa tempahan tidak boleh pada masa lampau.</span>`;
+  if($("e-tel").value.trim() && !telOK) mesej = `<span class="err">No. telefon tidak sah — sekurang-kurangnya 7 digit.</span>`;
+  else if(!tidakLampau) mesej = `<span class="err">Tarikh/masa tempahan tidak boleh pada masa lampau.</span>`;
   else if(!tarikhOK) mesej = `<span class="err">Tarikh tamat mesti pada atau selepas tarikh mula.</span>`;
   else if(sehari && tamat && mula >= tamat) mesej = `<span class="err">Masa tamat mesti selepas masa mula.</span>`;
   $("e-err").innerHTML = mesej;
@@ -420,6 +516,7 @@ async function submitEdit(id){
   const patch = {
     pemohon: $("e-pemohon").value.trim(),
     bahagian: $("e-bahagian").value.trim(),
+    telefon: $("e-tel").value.trim(),
     tujuan: $("e-tujuan").value.trim(),
     destinasi: $("e-destinasi").value.trim(),
     tarikh: $("e-tarikh").value,
@@ -431,7 +528,7 @@ async function submitEdit(id){
 
   /* Mod demo / tiada API: simpan setempat sahaja */
   if(!apiAktif() || !TOKEN){
-    Object.assign(b, patch);
+    Object.assign(b, patch, { telefonPemohon: patch.telefon });
     closeModal(); render(); notify(`Tempahan ${id} dikemas kini (mod tempatan).`);
     return;
   }

@@ -91,6 +91,8 @@ let tugasanCari = "";          // teks carian menu Tugasan Saya
 let tugasanPage = 1;           // muka surat semasa menu Tugasan Saya
 const SAIZ_HALAMAN = 20;       // bilangan rekod setiap muka surat (pagination)
 let tab = "dashboard";
+let tabAwam = "awam";      // paparan sebelum log masuk: "awam" | "manual"
+let manualPeranan = "pemohon"; // bahagian manual yang dipilih: "pemohon" | "pemandu"
 let editVehId = null; // id kenderaan yang sedang diedit (null = tambah baharu)
 let mingguOffset = 0;     // offset minggu jadual pemandu (admin) — 0 = minggu ini
 let mingguOffsetAwam = 0; // offset minggu jadual pemandu (paparan umum)
@@ -160,6 +162,19 @@ function fmtTarikh(iso){
   return `${parseInt(d)} ${bln[parseInt(m)-1]} ${y}`;
 }
 
+/* Peraturan sama seperti telefonSah_() di pelayan */
+const telefonSahJs = (t) => {
+  const s = String(t || "").trim();
+  return /^[0-9 +()\-]{7,30}$/.test(s) && s.replace(/\D/g, "").length >= 7;
+};
+
+/* Nombor telefon sebagai pautan boleh tekan (berguna pada telefon bimbit) */
+const telPaut = (no) => {
+  const t = String(no || "").trim();
+  if(!t) return "";
+  return `<a href="tel:${esc(t.replace(/[^0-9+]/g, ""))}" style="color:inherit;font-weight:600;text-decoration:underline">📞 ${esc(t)}</a>`;
+};
+
 const chip = (cfg) => `<span class="chip ${cfg.cls}"><span class="dot"></span>${cfg.label}</span>`;
 const rm = (n) => "RM " + n.toLocaleString("ms-MY", {minimumFractionDigits:2});
 /* Jumlah jam sebenar tempahan, termasuk yang merentas hari */
@@ -208,43 +223,125 @@ function conflicts(booking, vehicleId, driverId){
 let menuOpen = false; // keadaan menu hamburger (telefon)
 function toggleMenu(){ menuOpen = !menuOpen; renderNav(); }
 
+/* ============================================================
+   STRUKTUR MENU
+   Admin mempunyai banyak modul, jadi ia dikumpulkan dalam menu lungsur
+   supaya bar navigasi tidak perlu di-skrol. Tukar susunan di sini sahaja —
+   tiada perubahan lain diperlukan.
+   ============================================================ */
+const NAV_ADMIN = [
+  {id:"dashboard", label:"📊 Papan Pemuka"},
+  {id:"tempahan",  label:"📅 Tempahan"},
+  {grup:"aset",        label:"🚗 Aset", items:[
+    {id:"kenderaan",  label:"🚗 Kenderaan"},
+    {id:"pemandu",    label:"👥 Jadual Pemandu"},
+    {id:"selenggara", label:"🔧 Selenggaraan"},
+  ]},
+  {grup:"laporan",     label:"📈 Laporan", items:[
+    {id:"laporan",   label:"📈 Laporan Bulanan"},
+    {id:"penolakan", label:"🚫 Tugasan Ditolak"},
+  ]},
+  {grup:"pentadbiran", label:"🔐 Pentadbiran", items:[
+    {id:"pengguna", label:"🔐 Pengguna"},
+    {id:"log",      label:"📜 Log Audit"},
+  ]},
+];
+const NAV_PEMANDU = [
+  {id:"tugasan",   label:"🚘 Tugasan Saya"},
+  {id:"penolakan", label:"🚫 Tugasan Ditolak"},
+  {id:"manual",    label:"📖 Manual Pengguna"},
+];
+const NAV_PEMOHON = [
+  {id:"tempahan", label:"📅 Tempahan"},
+  {id:"manual",   label:"📖 Manual Pengguna"},
+];
+
+let navBuka = null; // id kumpulan yang sedang terbuka (desktop)
+function toggleNavGrup(g){ navBuka = (navBuka === g) ? null : g; renderNav(); }
+
+/* Cari satu item menu (termasuk dalam kumpulan) mengikut id tab */
+function cariNavItem(id){
+  for(const n of navSemasa()){
+    if(n.id === id) return n;
+    if(n.items){ const dlm = n.items.find(x => x.id === id); if(dlm) return dlm; }
+  }
+  return null;
+}
+function navSemasa(){
+  if(!currentUser) return [];
+  return isAdmin() ? NAV_ADMIN : (currentUser.peranan === "pemandu" ? NAV_PEMANDU : NAV_PEMOHON);
+}
+
+/* Tutup menu lungsur apabila klik di luar nav atau tekan Esc */
+document.addEventListener("click", (e) => {
+  if(!navBuka) return;
+  if(e.target && e.target.closest && e.target.closest("#nav")) return;
+  navBuka = null; renderNav();
+});
+document.addEventListener("keydown", (e) => {
+  if(e.key === "Escape" && navBuka){ navBuka = null; renderNav(); }
+});
+
 function renderNav(){
   const toggle = $("nav-toggle");
-  if(!currentUser){ $("nav").innerHTML = ""; $("nav").classList.remove("open"); if(toggle) toggle.style.display = "none"; return; }
-  const menunggu = bookings.filter(b => b.status === "menunggu").length;
-  const semua = [
-    {id:"dashboard", label:"📊 Papan Pemuka", admin:true},
-    {id:"tempahan", label:"📅 Tempahan", badge: isAdmin() ? menunggu : 0},
-    {id:"kenderaan", label:"🚗 Kenderaan", admin:true},
-    {id:"pemandu", label:"👥 Jadual Pemandu", admin:true},
-    {id:"selenggara", label:"🔧 Selenggaraan", admin:true},
-    {id:"laporan", label:"📈 Laporan Bulanan", admin:true},
-    {id:"pengguna", label:"🔐 Pengguna", admin:true},
-    {id:"penolakan", label:"🚫 Tugasan Ditolak", admin:true},
-    {id:"log", label:"📜 Log Audit", admin:true},
-  ];
-  const items = currentUser.peranan === "pemandu"
-    ? [{id:"tugasan", label:"🚘 Tugasan Saya"}, {id:"penolakan", label:"🚫 Tugasan Ditolak"}]
-    : semua.filter(n => !n.admin || isAdmin());
-  $("nav").innerHTML = items.map(n => `
-    <button class="${tab===n.id?'active':''}" onclick="setTab('${n.id}')">
-      ${n.label}${n.badge ? `<span class="badge">${n.badge}</span>` : ""}
-    </button>`).join("");
+  /* Sebelum log masuk: paparan umum + manual pengguna (untuk pengguna baharu) */
+  if(!currentUser){
+    const awamItems = [
+      {id:"awam", label:"📅 Jadual & Tempahan"},
+      {id:"manual", label:"📖 Manual Pengguna"},
+    ];
+    $("nav").innerHTML = awamItems.map(n => `
+      <button class="${tabAwam===n.id?'active':''}" onclick="setTabAwam('${n.id}')">${n.label}</button>`).join("");
+    $("nav").classList.toggle("open", menuOpen);
+    if(toggle){
+      toggle.style.display = "";
+      const aktif = awamItems.find(n => n.id === tabAwam);
+      toggle.innerHTML = `<span>${menuOpen ? "✕ Tutup Menu" : "☰ " + (aktif ? aktif.label : "Menu")}</span>`;
+    }
+    return;
+  }
+  const items = navSemasa();
+
+  /* Lencana = bilangan perkara yang menunggu tindakan pengguna ini */
+  const kiraLencana = (n) => {
+    if(n.id === "tempahan" && isAdmin()) return bookings.filter(b => b.status === "menunggu").length;
+    if(n.id === "tugasan") return bookings.filter(b =>
+      b.driverId === currentUser.driverId && b.status === "diluluskan" && !b.diterima).length;
+    return 0;
+  };
+  const butang = (n) => {
+    const bil = kiraLencana(n);
+    const lencana = bil ? `<span class="badge">${bil}</span>` : "";
+    return `<button class="${tab===n.id?'active':''}" onclick="setTab('${n.id}')">${n.label}${lencana}</button>`;
+  };
+  const kumpulan = (g) => {
+    const aktifDalam = g.items.some(x => x.id === tab);
+    return `<div class="nav-group">
+      <button class="${aktifDalam?'active':''}" onclick="event.stopPropagation();toggleNavGrup('${g.grup}')">
+        ${g.label}<span class="nav-caret">▾</span>
+      </button>
+      <div class="nav-menu ${navBuka===g.grup?'open':''}">${g.items.map(butang).join("")}</div>
+    </div>`;
+  };
+
+  $("nav").innerHTML = items.map(n => n.items ? kumpulan(n) : butang(n)).join("");
   $("nav").classList.toggle("open", menuOpen);
   if(toggle){
     toggle.style.display = ""; // CSS kawal: tersembunyi di desktop, tampil di telefon
-    const aktif = items.find(n => n.id === tab);
+    const aktif = cariNavItem(tab);
     toggle.innerHTML = `<span>${menuOpen ? "✕ Tutup Menu" : "☰ " + (aktif ? aktif.label : "Menu")}</span>`;
   }
 }
-function setTab(t){ tab = t; menuOpen = false; render(); } // pilih tab → tutup menu telefon
+function setTab(t){ tab = t; menuOpen = false; navBuka = null; render(); } // pilih tab → tutup menu
+function setTabAwam(t){ tabAwam = t; menuOpen = false; render(); }
 
 /* ================= RENDER UTAMA ================= */
 function render(){
   segarTarikh(); // pastikan HARI_INI & MINGGU sentiasa terkini
   renderNav();
   const m = $("main");
-  if(!currentUser){ m.innerHTML = renderAwam(); return; }
+  if(!currentUser){ m.innerHTML = tabAwam === "manual" ? renderManual() : renderAwam(); return; }
+  if(tab === "manual") m.innerHTML = renderManual();
   if(tab === "dashboard") m.innerHTML = renderDashboard();
   if(tab === "tempahan") m.innerHTML = renderTempahan();
   if(tab === "kenderaan") m.innerHTML = renderKenderaan();
@@ -313,6 +410,9 @@ function pakaiData(d){
   bookings = d.bookings || [];
   maintenance = d.maintenance || [];
   if(d.users) users = d.users;
+  /* Data yang datang daripada tindakan pengguna sendiri tidak perlu beri amaran —
+     rakam keadaan terus. Hanya segarData() yang membandingkan dan memberi amaran. */
+  if(!_sedangSegar && currentUser) jejakTempahan = ambilJejak();
   if(d.counters){
     nextNum = d.counters.nextNum || nextNum;
     nextVeh = d.counters.nextVeh || nextVeh;
@@ -348,18 +448,85 @@ async function simpanRekod(action, payload, ubahTempatan, mesejOK){
   }
 }
 
-/* Muat semula data dari server (cth. bila pengguna kembali ke tab app) supaya
-   tempahan/kemas kini pengguna lain kelihatan tanpa perlu log masuk semula. */
+/* ============================================================
+   PEMBERITAHUAN DALAM APP
+   Sistem menyemak pelayan secara berkala dan memberi amaran apabila ada
+   perkara yang memerlukan tindakan. Ini BUKAN Web Push (yang memerlukan
+   HTTPS + sambungan internet keluar dari pelayan) — kaedah ini berfungsi
+   sepenuhnya dalam LAN jabatan, tetapi hanya semasa app dibuka.
+   ============================================================ */
+const SELANG_SEMAK = 60000;   // semak pelayan setiap 60 saat
+let jejakTempahan = null;     // keadaan tempahan pada semakan sebelumnya
+let bilAmaran = 0;            // kiraan untuk tajuk tab pelayar
+let _timerSemak = null;
+const TAJUK_ASAL = document.title;
+
+function ambilJejak(){
+  const m = {};
+  for(const b of bookings) m[b.id] = { status:b.status, driverId:b.driverId || "", diterima:b.diterima || "" };
+  return m;
+}
+function kemasTajuk(){ document.title = bilAmaran > 0 ? `(${bilAmaran}) ${TAJUK_ASAL}` : TAJUK_ASAL; }
+
+/* Bandingkan data baharu dengan semakan sebelumnya dan beri amaran yang berkaitan
+   dengan peranan pengguna sahaja. Muat pertama hanya merakam keadaan (tiada amaran). */
+function semakPerubahan(){
+  if(!currentUser) return;
+  if(jejakTempahan === null){ jejakTempahan = ambilJejak(); return; }
+  const mesej = [];
+  const me = currentUser.driverId;
+
+  for(const b of bookings){
+    const lama = jejakTempahan[b.id];
+    if(isAdmin()){
+      if(b.status === "menunggu" && (!lama || lama.status !== "menunggu"))
+        mesej.push(`Tempahan ${b.id} menunggu kelulusan.`);
+    } else if(currentUser.peranan === "pemandu"){
+      const kini  = me && b.driverId === me && b.status === "diluluskan" && !b.diterima;
+      const dulu  = lama && me && lama.driverId === me && lama.status === "diluluskan" && !lama.diterima;
+      if(kini && !dulu) mesej.push(`Tugasan baharu ${b.id} — sila terima tugasan.`);
+    } else {
+      if(lama && lama.status === "menunggu"){
+        if(b.status === "diluluskan") mesej.push(`Tempahan ${b.id} telah diluluskan.`);
+        if(b.status === "ditolak")    mesej.push(`Tempahan ${b.id} telah ditolak.`);
+      }
+    }
+  }
+  jejakTempahan = ambilJejak();
+  if(mesej.length){
+    bilAmaran += mesej.length;
+    kemasTajuk();
+    notify(mesej.length === 1 ? mesej[0] : `${mesej.length} kemas kini baharu — sila semak senarai.`, "warn");
+  }
+}
+
+/* Kiraan amaran dikosongkan sebaik pengguna berinteraksi dengan app */
+document.addEventListener("click", () => { if(bilAmaran){ bilAmaran = 0; kemasTajuk(); } });
+
+function mulaSemakBerkala(){
+  if(_timerSemak) clearInterval(_timerSemak);
+  _timerSemak = setInterval(() => {
+    if(document.visibilityState === "visible") segarData();
+  }, SELANG_SEMAK);
+}
+function hentiSemakBerkala(){
+  if(_timerSemak){ clearInterval(_timerSemak); _timerSemak = null; }
+  jejakTempahan = null; bilAmaran = 0; kemasTajuk();
+}
+
+/* Muat semula data dari server (bila pengguna kembali ke tab, atau setiap
+   SELANG_SEMAK) supaya perubahan pengguna lain kelihatan tanpa log masuk semula. */
 let _segarBerjalan = false;
+let _sedangSegar = false;
 async function segarData(){
   if(!apiAktif() || !TOKEN || _segarBerjalan) return;
-  _segarBerjalan = true;
+  _segarBerjalan = true; _sedangSegar = true;
   try{
     const res = await api("load");
     if(res.sesiTamat){ sesiTamat(); return; }
-    if(res.ok && res.data){ pakaiData(res.data); render(); }
+    if(res.ok && res.data){ pakaiData(res.data); semakPerubahan(); render(); }
   }catch(e){ /* senyap — cuba lagi pada peluang seterusnya */ }
-  finally{ _segarBerjalan = false; }
+  finally{ _segarBerjalan = false; _sedangSegar = false; }
 }
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") segarData(); });
 
@@ -370,6 +537,7 @@ function renderLogin(){
   $("login-root").innerHTML = `
   <div class="login-bg">
     <div class="login-card">
+      <img class="login-logo-ppat" src="logo-ppat.png?v=30" alt="Logo Perbadanan Perpustakaan Awam Terengganu">
       <div class="login-logo">🚐</div>
       <h2>SisKEN</h2>
       <p class="login-sub">Sistem Tempahan Kenderaan<br>PERBADANAN PERPUSTAKAAN AWAM TERENGGANU</p>
@@ -449,12 +617,16 @@ function masukApp(){
     : currentUser.peranan === "pemandu" ? "Pemandu" : "Pemohon";
   $("u-avatar").textContent = currentUser.nama.replace(/^(En\.|Pn\.|Cik|Dr\.)\s*/i, "").charAt(0).toUpperCase() || "?";
   tab = isAdmin() ? "dashboard" : (currentUser.peranan === "pemandu" ? "tugasan" : "tempahan");
+  manualPeranan = currentUser.peranan === "pemandu" ? "pemandu" : "pemohon";
+  jejakTempahan = ambilJejak();   // rakam keadaan awal — jangan beri amaran untuk data sedia ada
+  mulaSemakBerkala();
   $("btn-auth").textContent = "⎋ Keluar";
   $("btn-pw").style.display = (apiAktif() && TOKEN) ? "" : "none"; // mod demo tiada kata laluan
   render();
 }
 
 function sesiTamat(){
+  hentiSemakBerkala();
   buangSesi();
   TOKEN = null; currentUser = null; users = [];
   $("u-nama").textContent = "—";
@@ -470,6 +642,7 @@ function sesiTamat(){
 async function doLogout(){
   if(!currentUser) return;
   if(TOKEN){ try{ api("logout"); }catch(e){} }
+  hentiSemakBerkala();
   buangSesi();
   TOKEN = null; currentUser = null; users = [];
   $("u-nama").textContent = "—";

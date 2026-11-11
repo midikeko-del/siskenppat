@@ -41,7 +41,10 @@ try {
     // 3b) Migrasi pemasangan SEDIA ADA — tambah lajur baharu yang belum wujud.
     //     (CREATE TABLE IF NOT EXISTS tidak mengubah jadual yang sudah ada.)
     $lajurBaharu = [
-        "tempahan" => ["diterima" => "VARCHAR(20) NOT NULL DEFAULT ''"],
+        "tempahan" => [
+            "diterima"       => "VARCHAR(20) NOT NULL DEFAULT ''",
+            "telefonPemohon" => "VARCHAR(30) NOT NULL DEFAULT ''",
+        ],
         "pengguna" => ["superadmin" => "TINYINT(1) NOT NULL DEFAULT 0"],
     ];
     foreach ($lajurBaharu as $jadual => $medan) {

@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS tempahan (
   tarikhTamat  VARCHAR(10)  NOT NULL DEFAULT '',
   -- Masa pemandu menekan "Terima Tugas" (kosong = belum diterima)
   diterima     VARCHAR(20)  NOT NULL DEFAULT '',
+  -- No. telefon untuk dihubungi bagi perjalanan ini (pemandu <-> pemohon)
+  telefonPemohon VARCHAR(30) NOT NULL DEFAULT '',
   KEY idx_status (status),
   KEY idx_vehicle (vehicleId),
   KEY idx_driver (driverId),

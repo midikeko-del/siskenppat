@@ -4,7 +4,7 @@
    terkini bila online), fallback ke cache bila luar talian.
    Permintaan ke API backend (php/api.php) TIDAK di-cache.
    ============================================================ */
-const CACHE = "sisken-v24"; // naikkan nombor (v2, v3...) bila kemas kini app
+const CACHE = "sisken-v30"; // naikkan nombor (v2, v3...) bila kemas kini app
 
 const ASET = [
   "./",
@@ -12,6 +12,7 @@ const ASET = [
   "./style.css",
   "./js/core.js",
   "./js/awam.js",
+  "./js/manual.js",
   "./js/dashboard.js",
   "./js/tempahan.js",
   "./js/kenderaan.js",
@@ -24,6 +25,7 @@ const ASET = [
   "./js/log.js",
   "./js/boot.js",
   "./manifest.json",
+  "./logo-ppat.png",
   "./icon-192.png",
   "./icon-512.png",
 ];

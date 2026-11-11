@@ -6,7 +6,7 @@ function kadTugasan(t, butang){
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="id">${t.id}</span>${chip(BSTATUS[t.status])}</div>
         <h4>${esc(t.tujuan)}</h4>
         <div class="meta">📍 ${esc(t.destinasi)} &nbsp;·&nbsp; ${paparTarikh(t)}, ${paparMasa(t)} &nbsp;·&nbsp; ${t.penumpang} penumpang</div>
-        <div class="who">${esc(t.pemohon || "")}${t.bahagian ? " — " + esc(t.bahagian) : ""}</div>
+        <div class="who">${esc(t.pemohon || "")}${t.bahagian ? " — " + esc(t.bahagian) : ""}${t.telefonPemohon ? ` &nbsp;·&nbsp; ${telPaut(t.telefonPemohon)}` : ""}</div>
         ${v ? `<div class="assign"><span class="plat">${esc(v.plat)}</span> ${esc(v.model)}</div>` : ""}
         ${t.masaSelesai ? `<div class="who" style="color:var(--green);margin-top:6px">✔ Selesai sebenar: ${fmtMasaSelesai(t.masaSelesai)}</div>` : ""}
         ${t.status === "diluluskan" ? (t.diterima

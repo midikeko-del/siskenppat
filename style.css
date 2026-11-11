@@ -13,10 +13,11 @@
   input:focus,select:focus{outline:2px solid var(--amber);border-color:var(--amber)}
 
   /* ===== Pengepala ===== */
-  header{background:var(--ink);color:#fff}
+  header{background:var(--ink);color:#fff;position:relative;z-index:40}
   .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
   .head-top{display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:12px;flex-wrap:wrap}
   .brand{display:flex;align-items:center;gap:12px}
+  .logo-ppat{height:44px;width:auto;display:block;background:#fff;border-radius:8px;padding:3px 6px}
   .logo{width:42px;height:42px;border-radius:10px;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:22px}
   .brand h1{font-size:17px;font-weight:700;line-height:1.2}
   .brand p{font-size:12px;color:var(--slate-l)}
@@ -35,11 +36,21 @@
   /* ===== Skrin log masuk ===== */
   .login-bg{position:fixed;inset:0;background:linear-gradient(160deg,#0f172a 0%,#1e293b 100%);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
   .login-card{background:#fff;border-radius:20px;padding:34px 30px;width:100%;max-width:380px;display:grid;gap:14px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+  .login-logo-ppat{height:64px;width:auto;display:block;margin:0 auto 10px}
   .login-logo{width:58px;height:58px;border-radius:14px;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto}
   .login-card h2{text-align:center;font-size:22px}
   .login-sub{text-align:center;font-size:13px;color:var(--slate);margin-top:-8px}
   .login-note{font-size:13px;color:var(--slate);background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;line-height:1.6}
-  nav{display:flex;gap:4px;overflow-x:auto}
+  nav{display:flex;gap:4px;flex-wrap:wrap}
+  .nav-group{position:relative}
+  .nav-caret{font-size:10px;opacity:.75}
+  .nav-menu{display:none;position:absolute;top:100%;left:0;z-index:60;min-width:234px;
+            background:var(--ink2);border:1px solid #334155;border-radius:10px;padding:6px;
+            box-shadow:0 14px 32px rgba(15,23,42,.38)}
+  .nav-menu.open{display:block}
+  .nav-menu button{width:100%;justify-content:flex-start;border-radius:8px;padding:10px 12px;font-size:14px;color:#cbd5e1}
+  .nav-menu button:hover{background:#334155;color:#fff}
+  .nav-menu button.active{background:var(--amber);color:var(--ink)}
   nav button{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:14px;font-weight:500;color:#cbd5e1;border-radius:10px 10px 0 0;white-space:nowrap}
   nav button:hover{background:var(--ink2);color:#fff}
   nav button.active{background:var(--bg);color:var(--ink)}
@@ -171,6 +182,7 @@
     main{padding:16px 12px;gap:16px}
     .head-top{padding:10px 0;gap:8px}
     .brand{gap:8px}
+    .logo-ppat{height:34px;padding:2px 4px;border-radius:6px}
     .brand h1{font-size:13.5px}
     .brand p{font-size:9.5px;letter-spacing:.01em}
     .logo{width:34px;height:34px;font-size:17px;border-radius:8px}
@@ -184,6 +196,14 @@
     nav.open{display:flex}
     nav button{padding:11px 14px;font-size:14px;border-radius:8px;width:100%;justify-content:flex-start;background:var(--ink2);color:#fff}
     nav button.active{background:var(--amber);color:var(--ink)}
+    .nav-group{width:100%}
+    .nav-group>button{background:none;color:var(--slate-l);font-size:11px;font-weight:700;
+                      text-transform:uppercase;letter-spacing:.05em;padding:10px 14px 4px}
+    .nav-group>button.active{background:none;color:var(--amber)}
+    .nav-caret{display:none}
+    .nav-menu{display:block;position:static;min-width:0;background:none;border:none;
+              box-shadow:none;padding:0 0 0 10px}
+    .nav-menu button{margin-bottom:3px;background:var(--ink2);color:#fff}
     h2.sect{font-size:16px}
     .stats{grid-template-columns:1fr 1fr;gap:10px}
     .stat{padding:12px 13px;gap:10px}

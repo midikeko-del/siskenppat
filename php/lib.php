@@ -38,6 +38,12 @@ function tarikhSah_(string $s): bool {
     return (bool) preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m) && checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
 }
 
+/** No. telefon yang munasabah: digit, ruang, tanda +, - dan kurungan; sekurang-kurangnya 7 digit */
+function telefonSah_(string $t): bool {
+    if (!preg_match('/^[0-9 +()\-]{7,30}$/', $t)) return false;
+    return strlen(preg_replace('/\D/', '', $t)) >= 7;
+}
+
 /** Masa "HH:mm" 24 jam yang sah */
 function masaSah_(string $s): bool {
     return (bool) preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $s);

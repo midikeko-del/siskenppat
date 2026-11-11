@@ -120,7 +120,19 @@ function buildData_(array $user): array {
         $bookings = array_values(array_filter($bookings, function ($b) use ($user) {
             return $b["userId"] === $user["userId"] || (!empty($user["driverId"]) && $b["driverId"] === $user["driverId"]);
         }));
-        $drivers = array_map(fn($d) => ["id" => $d["id"], "nama" => $d["nama"], "status" => $d["status"]], $drivers);
+        /* Nombor telefon pemandu hanya didedahkan bagi tempahan yang benar-benar
+           melibatkan pengguna ini dan telah diluluskan — untuk menyelaras tempat
+           berjumpa. Pemandu lain kekal tanpa nombor. */
+        $bolehHubungi = [];
+        foreach ($bookings as $b) {
+            if (!empty($b["driverId"]) && ($b["status"] === "diluluskan" || $b["status"] === "selesai"))
+                $bolehHubungi[$b["driverId"]] = true;
+        }
+        $drivers = array_map(function ($d) use ($bolehHubungi) {
+            $o = ["id" => $d["id"], "nama" => $d["nama"], "status" => $d["status"]];
+            if (isset($bolehHubungi[$d["id"]])) $o["telefon"] = $d["telefon"];
+            return $o;
+        }, $drivers);
         $maintenance = [];
     }
 
@@ -478,6 +490,7 @@ function bookingAdd_(array $user, array $b): array {
         "id" => nextBookingId_(),
         "pemohon" => trim((string) ($b["pemohon"] ?? "")),
         "bahagian" => trim((string) ($b["bahagian"] ?? "")),
+        "telefonPemohon" => trim((string) ($b["telefon"] ?? "")),
         "tujuan" => trim((string) ($b["tujuan"] ?? "")),
         "destinasi" => trim((string) ($b["destinasi"] ?? "")),
         "tarikh" => trim((string) ($b["tarikh"] ?? "")),
@@ -493,6 +506,8 @@ function bookingAdd_(array $user, array $b): array {
     ];
     if (!$rec["pemohon"] || !$rec["tujuan"] || !$rec["destinasi"] || !$rec["tarikh"] || !$rec["masaMula"])
         return ["ok" => false, "ralat" => "Maklumat tempahan tidak lengkap."];
+    if ($rec["telefonPemohon"] === "") return ["ok" => false, "ralat" => "No. telefon untuk dihubungi wajib diisi."];
+    if (!telefonSah_($rec["telefonPemohon"])) return ["ok" => false, "ralat" => "No. telefon tidak sah."];
     if ($ralat = semakMasaTempahan_($rec)) return ["ok" => false, "ralat" => $ralat];
     $now = nowKL_(); $hariIni = substr($now, 0, 10); $masaIni = substr($now, 11, 5);
     if ($rec["tarikh"] < $hariIni) return ["ok" => false, "ralat" => "Tarikh tempahan tidak boleh pada masa lampau."];
@@ -500,10 +515,11 @@ function bookingAdd_(array $user, array $b): array {
     if ($rec["tarikhTamat"] && $rec["tarikhTamat"] < $rec["tarikh"]) return ["ok" => false, "ralat" => "Tarikh tamat mesti pada atau selepas tarikh mula."];
 
     db()->prepare(
-        "INSERT INTO tempahan (id,pemohon,bahagian,tujuan,destinasi,tarikh,masaMula,masaTamat,penumpang,status,vehicleId,driverId,userId,masaSelesai,tarikhTamat)
-         VALUES (:id,:pemohon,:bahagian,:tujuan,:destinasi,:tarikh,:masaMula,:masaTamat,:penumpang,:status,NULL,NULL,:userId,:masaSelesai,:tarikhTamat)"
+        "INSERT INTO tempahan (id,pemohon,bahagian,telefonPemohon,tujuan,destinasi,tarikh,masaMula,masaTamat,penumpang,status,vehicleId,driverId,userId,masaSelesai,tarikhTamat)
+         VALUES (:id,:pemohon,:bahagian,:tel,:tujuan,:destinasi,:tarikh,:masaMula,:masaTamat,:penumpang,:status,NULL,NULL,:userId,:masaSelesai,:tarikhTamat)"
     )->execute([
-        ":id" => $rec["id"], ":pemohon" => $rec["pemohon"], ":bahagian" => $rec["bahagian"], ":tujuan" => $rec["tujuan"],
+        ":id" => $rec["id"], ":pemohon" => $rec["pemohon"], ":bahagian" => $rec["bahagian"],
+        ":tel" => $rec["telefonPemohon"], ":tujuan" => $rec["tujuan"],
         ":destinasi" => $rec["destinasi"], ":tarikh" => $rec["tarikh"], ":masaMula" => $rec["masaMula"], ":masaTamat" => $rec["masaTamat"],
         ":penumpang" => $rec["penumpang"], ":status" => $rec["status"], ":userId" => $rec["userId"],
         ":masaSelesai" => $rec["masaSelesai"], ":tarikhTamat" => $rec["tarikhTamat"],
@@ -647,6 +663,61 @@ function bertindih_(array $a, array $b): bool {
     return $aMula < $bTamat && $bMula < $aTamat;
 }
 
+/* ---------- Semakan kenderaan + pemandu (dikongsi oleh lulus & tukar tugasan) ----------
+   Status kenderaan/pemandu (arkib, selenggaraan, cuti) hanya disemak apabila ia
+   BERUBAH: kalau admin hanya menukar kenderaan sementara mengekalkan pemandu yang
+   sama, pemandu itu tidak perlu lulus semula semakan status. Kapasiti dan
+   pertindihan jadual sentiasa disemak. Pulang mesej ralat, atau null jika sah. */
+function semakTugasan_(array $b, string $vId, string $dId): ?string {
+    $stmt = db()->prepare("SELECT * FROM kenderaan WHERE id = :id"); $stmt->execute([":id" => $vId]); $v = $stmt->fetch();
+    $stmt = db()->prepare("SELECT * FROM pemandu WHERE id = :id"); $stmt->execute([":id" => $dId]); $p = $stmt->fetch();
+    if (!$v) return "Kenderaan tidak dijumpai.";
+    if (!$p) return "Pemandu tidak dijumpai.";
+    $v = castRow($v, ["kapasiti", "odometer", "bahanApi"]);
+
+    if ($vId !== ($b["vehicleId"] ?? null)) {
+        if ($v["status"] === "dipadam") return "Kenderaan telah diarkibkan.";
+        if ($v["status"] === "selenggara") return "Kenderaan sedang dalam selenggaraan.";
+    }
+    if ($dId !== ($b["driverId"] ?? null)) {
+        if ($p["status"] === "dipadam") return "Pemandu telah diarkibkan.";
+        if ($p["status"] === "cuti") return "Pemandu sedang bercuti.";
+    }
+    if ((int) $v["kapasiti"] < (int) $b["penumpang"]) return "Kapasiti kenderaan tidak mencukupi.";
+
+    $konflik = array_values(array_filter(readTempahan(), fn($x) =>
+        $x["id"] !== $b["id"] && $x["status"] === "diluluskan" && bertindih_($x, $b) && ($x["vehicleId"] === $vId || $x["driverId"] === $dId)
+    ));
+    if (!empty($konflik))
+        return "Konflik jadual dengan " . implode(", ", array_map(fn($c) => $c["id"], $konflik)) . " — kenderaan/pemandu sudah ditugaskan pada masa bertindih.";
+    return null;
+}
+
+/* ---------- Tukar kenderaan / pemandu bagi tempahan yang telah diluluskan (admin) ----------
+   Hanya sebelum perjalanan bermula. Sebarang pertukaran membatalkan pengesahan
+   pemandu, supaya pemandu (lama atau baharu) mengesahkan pasangan kenderaan &
+   tugasan yang terkini. */
+function bookingReassign_(array $user, array $d): array {
+    $b = ambilTempahan_((string) ($d["id"] ?? ""));
+    if (!$b) return ["ok" => false, "ralat" => "Tempahan tidak dijumpai."];
+    if ($b["status"] !== "diluluskan") return ["ok" => false, "ralat" => "Hanya tempahan yang diluluskan boleh ditukar tugasannya."];
+    if (($b["tarikh"] . " " . $b["masaMula"]) <= nowKL_())
+        return ["ok" => false, "ralat" => "Perjalanan telah bermula. Tiada pertukaran kenderaan atau pemandu dibenarkan."];
+
+    $vId = (string) ($d["vehicleId"] ?? ""); $dId = (string) ($d["driverId"] ?? "");
+    if (!$vId || !$dId) return ["ok" => false, "ralat" => "Sila pilih kenderaan dan pemandu."];
+    if ($vId === $b["vehicleId"] && $dId === $b["driverId"])
+        return ["ok" => false, "ralat" => "Tiada perubahan — kenderaan dan pemandu masih sama."];
+    if ($ralat = semakTugasan_($b, $vId, $dId)) return ["ok" => false, "ralat" => $ralat];
+
+    $lama = ((string) $b["vehicleId"]) . " / " . ((string) $b["driverId"]);
+    db()->prepare("UPDATE tempahan SET vehicleId=:v, driverId=:d, diterima='' WHERE id=:id")
+        ->execute([":v" => $vId, ":d" => $dId, ":id" => $b["id"]]);
+    logAudit_($user["userId"], "Tukar Tugasan", $b["id"], $lama . " -> " . $vId . " / " . $dId);
+    $b["vehicleId"] = $vId; $b["driverId"] = $dId; $b["diterima"] = "";
+    return ["ok" => true, "booking" => $b, "data" => buildData_($user)];
+}
+
 /* ---------- Luluskan tempahan (admin) — konflik disahkan di SERVER ---------- */
 function bookingApprove_(array $user, array $d): array {
     $b = ambilTempahan_((string) ($d["id"] ?? ""));
@@ -655,23 +726,7 @@ function bookingApprove_(array $user, array $d): array {
     $vId = (string) ($d["vehicleId"] ?? ""); $dId = (string) ($d["driverId"] ?? "");
     if (!$vId || !$dId) return ["ok" => false, "ralat" => "Sila pilih kenderaan dan pemandu."];
 
-    $stmt = db()->prepare("SELECT * FROM kenderaan WHERE id = :id"); $stmt->execute([":id" => $vId]); $v = $stmt->fetch();
-    $stmt = db()->prepare("SELECT * FROM pemandu WHERE id = :id"); $stmt->execute([":id" => $dId]); $p = $stmt->fetch();
-    if (!$v) return ["ok" => false, "ralat" => "Kenderaan tidak dijumpai."];
-    if (!$p) return ["ok" => false, "ralat" => "Pemandu tidak dijumpai."];
-    $v = castRow($v, ["kapasiti", "odometer", "bahanApi"]);
-    if ($v["status"] === "dipadam") return ["ok" => false, "ralat" => "Kenderaan telah diarkibkan."];
-    if ($v["status"] === "selenggara") return ["ok" => false, "ralat" => "Kenderaan sedang dalam selenggaraan."];
-    if ((int) $v["kapasiti"] < (int) $b["penumpang"]) return ["ok" => false, "ralat" => "Kapasiti kenderaan tidak mencukupi."];
-    if ($p["status"] === "dipadam") return ["ok" => false, "ralat" => "Pemandu telah diarkibkan."];
-    if ($p["status"] === "cuti") return ["ok" => false, "ralat" => "Pemandu sedang bercuti."];
-
-    $semua = readTempahan();
-    $konflik = array_values(array_filter($semua, fn($x) =>
-        $x["id"] !== $b["id"] && $x["status"] === "diluluskan" && bertindih_($x, $b) && ($x["vehicleId"] === $vId || $x["driverId"] === $dId)
-    ));
-    if (!empty($konflik))
-        return ["ok" => false, "ralat" => "Konflik jadual dengan " . implode(", ", array_map(fn($c) => $c["id"], $konflik)) . " — kenderaan/pemandu sudah ditugaskan pada masa bertindih."];
+    if ($ralat = semakTugasan_($b, $vId, $dId)) return ["ok" => false, "ralat" => $ralat];
 
     $b["status"] = "diluluskan"; $b["vehicleId"] = $vId; $b["driverId"] = $dId; $b["diterima"] = "";
     db()->prepare("UPDATE tempahan SET status=:s, vehicleId=:v, driverId=:d, diterima='' WHERE id=:id")
@@ -727,6 +782,7 @@ function bookingEdit_(array $user, array $d): array {
         "id" => $b["id"],
         "pemohon" => trim((string) ($d["pemohon"] ?? "")),
         "bahagian" => trim((string) ($d["bahagian"] ?? "")),
+        "telefonPemohon" => trim((string) ($d["telefon"] ?? "")),
         "tujuan" => trim((string) ($d["tujuan"] ?? "")),
         "destinasi" => trim((string) ($d["destinasi"] ?? "")),
         "tarikh" => trim((string) ($d["tarikh"] ?? "")),
@@ -737,6 +793,8 @@ function bookingEdit_(array $user, array $d): array {
     ];
     if (!$calon["pemohon"] || !$calon["tujuan"] || !$calon["destinasi"] || !$calon["tarikh"] || !$calon["masaMula"])
         return ["ok" => false, "ralat" => "Maklumat tempahan tidak lengkap."];
+    if ($calon["telefonPemohon"] === "") return ["ok" => false, "ralat" => "No. telefon untuk dihubungi wajib diisi."];
+    if (!telefonSah_($calon["telefonPemohon"])) return ["ok" => false, "ralat" => "No. telefon tidak sah."];
     if ($ralat = semakMasaTempahan_($calon)) return ["ok" => false, "ralat" => $ralat];
 
     $hariIni = substr($now, 0, 10); $masaIni = substr($now, 11, 5);
@@ -767,11 +825,12 @@ function bookingEdit_(array $user, array $d): array {
     $diterimaBaru = $masaBerubah ? "" : (string) ($b["diterima"] ?? "");
 
     db()->prepare(
-        "UPDATE tempahan SET pemohon=:pemohon, bahagian=:bahagian, tujuan=:tujuan, destinasi=:destinasi,
+        "UPDATE tempahan SET pemohon=:pemohon, bahagian=:bahagian, telefonPemohon=:tel, tujuan=:tujuan, destinasi=:destinasi,
          tarikh=:tarikh, masaMula=:masaMula, masaTamat=:masaTamat, tarikhTamat=:tarikhTamat,
          penumpang=:penumpang, diterima=:diterima WHERE id=:id"
     )->execute([
-        ":pemohon" => $calon["pemohon"], ":bahagian" => $calon["bahagian"], ":tujuan" => $calon["tujuan"], ":destinasi" => $calon["destinasi"],
+        ":pemohon" => $calon["pemohon"], ":bahagian" => $calon["bahagian"], ":tel" => $calon["telefonPemohon"],
+        ":tujuan" => $calon["tujuan"], ":destinasi" => $calon["destinasi"],
         ":tarikh" => $calon["tarikh"], ":masaMula" => $calon["masaMula"], ":masaTamat" => $calon["masaTamat"],
         ":tarikhTamat" => $calon["tarikhTamat"], ":penumpang" => $calon["penumpang"], ":diterima" => $diterimaBaru, ":id" => $b["id"],
     ]);
@@ -987,6 +1046,7 @@ function handle(): array {
         case "bookingReject": return adminSahaja_($user) ?? bookingReject_($user, $d);
         case "bookingEdit": return adminSahaja_($user) ?? bookingEdit_($user, $d);
         case "bookingUnassign": return adminSahaja_($user) ?? bookingUnassign_($user, $d);
+        case "bookingReassign": return adminSahaja_($user) ?? bookingReassign_($user, $d);
         case "auditLog": return adminSahaja_($user) ?? ["ok" => true, "log" => readLogTerkini()];
         case "penolakanList": return penolakanList_($user);
         case "logPurge": return superSahaja_($user) ?? logPurge_($user);
